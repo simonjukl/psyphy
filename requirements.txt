@@ -1,0 +1,8 @@
+# Install into a virtual environment to avoid scipy version conflicts:
+#   python -m venv .venv
+#   .venv\Scripts\activate        (Windows)
+#   source .venv/bin/activate     (Mac/Linux)
+#   pip install -r requirements.txt
+
+psychopy>=2024.1.0
+numpy>=1.24.0

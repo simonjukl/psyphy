@@ -1,0 +1,21 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# PsychoPy / Python runtime artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Experiment data output
+data/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

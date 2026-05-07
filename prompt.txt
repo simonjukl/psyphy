@@ -1,0 +1,280 @@
+prompt: 
+@exp.py  in this experiment I want to change some paramters.  
+- Within a single path, an edge cannot be visited more than once (but a node can)
+- limit of possible paths ranging as a outcome variable between 1 to 6 paths max. FIX - everyone will see N number of given paths 
+- the predictive variable is the N of simple loops (cyclomatic number: e - v + c) which are zero to five (also measure more complex loops)
+- min and max density: it is covariate as discrete number ranging from (0.4 - 10 edges) to 0.8 (19 edges) 
+- no node is in isolation
+
+thinking: 
+
+Within a single path, an edge cannot be visited more than once (but a node can) - This changes the path definition from "simple paths (no node revisited)" to "paths where edges aren't revisited but nodes can be". This is called "edge-simple paths" or "trail" in graph theory.
+
+Limit of possible paths ranging as outcome variable between 1 to 6 paths max. FIX - everyone will see N number of given paths - So the number of paths (edge-simple paths) should be constrained to be between 1 and 6.
+
+I need to generate graphs where the count of edge-simple paths falls in [1, 6]. The predictive variable is the cyclomatic number (e - v + c), which measures the number of independent cycles in the graph. For this experiment, I need to understand what "measuring more complex loops" means—whether they want additional loop metrics beyond just the cyclomatic complexity.
+
+For the density covariate, I'm working with a discrete range where 0.4 density corresponds to about 10 edges and 0.8 density corresponds to about 19 edges. Let me verify this mapping by checking whether they're referring to undirected or directed edges and recalculating the actual density values. So they're clarifying that the density values should be stored as actual edge counts rather than fractions—specifically 10 to 19 undirected pairs in the CSV, which correspond to the 0.4 to 0.8 density range.
+
+Now I need to make several implementation changes. First, I'm switching from node-simple paths to edge-simple paths, which means tracking visited edges instead of visited nodes during traversal. I'm also adding a constraint that no node can be isolated—every node must have at least degree 1. Let me refactor the path-counting logic to work with trails instead.
+
+Implementing edge-simple path traversal...
+
+There's an ambiguity I need to resolve though: when we reach the end node, should we stop immediately or can we pass through it and continue searching? The definition says edges can't repeat but nodes can, so theoretically we could revisit the end node. However, in the context of counting paths from start to end, I think reaching the end node should terminate that particular path. I'm realizing the key question is whether we stop the first time we reach the end node or allow revisiting it. If nodes can repeat but edges can't, then stopping at the first occurrence of end makes sense—otherwise path counting becomes infinitely complex in cyclic graphs. This interpretation also aligns with the experiment's intent: allowing node revisits through different edges creates more valid paths without the explosion of possibilities that would come from passing through end multiple times.
+
+Writing the DFS implementation...
+
+Now I'm thinking about the experimental design—the outcome variable should be the count of edge-simple trails between 1 and 6, and I need to generate graphs that reliably produce these specific path counts so participants can estimate them consistently. variable between 1 to 6 paths max" - so we want graphs that have between 1 and 6 trails. We need to generate graphs with a specific number of trails (the "correct answer" that participants are estimating).
+
+And "FIX - everyone will see N number of given paths" - I think this means we should balance across path counts. Each trial has a specific path count (1-6), and this is the primary outcome variable.
+
+So the trial design would be:
+
+Predictor: cyclomatic number (0-5)
+Outcome (to estimate): number of edge-simple trails (1-6)
+Covariate: number of edges (density)
+Wait, but if the path count is fixed by design, it can't be an "outcome variable" in the statistical sense - unless they mean it's the variable participants are estimating, not in the experimental design sense.
+
+I think what they're getting at is that the graphs should have trail counts spanning 1-6, each participant sees graphs with varying trail counts, and the participant's estimate of that trail count is what we're measuring in the psychophysics sense. The cyclomatic number serves as our predictor of interest, with edge count as a covariate to control for graph density.
+
+Now I need to figure out the cyclomatic number calculation for these directed graphs on a 4×4 grid, which uses the formula e - v + c where e is edges, v is vertices (16), and c is the number of strongly connected components. I'm realizing there's a fundamental issue here—with only 10 undirected edges, the graph can't even be connected across 16 nodes since a tree requires at least 15 edges. This means my density calculation or the constraint setup must be wrong, because a strongly connected graph needs far more edges than what 0.4 density provides. fewer than needed for connectivity! That seems wrong.
+
+Let me re-examine. The _all_pairs function generates adjacent pairs in a 4×4 grid:
+
+Horizontal: 4 rows × 3 pairs = 12 pairs
+Vertical: 3 columns × 4 pairs = ... wait let me recalculate
+For 4×4 grid:
+Horizontal pairs per row: GRID_SIZE-1 = 3, rows = GRID_SIZE = 4 → 12 pairs
+Vertical pairs per column: GRID_SIZE-1 = 3, columns = GRID_SIZE = 4 → 12 pairs
+Total: 24 pairs
+So with density 0.4, we keep 0.4 × 24 ≈ 10 pairs = 10 undirected edges.
+
+A 4×4 grid has 16 nodes. A spanning tree needs 15 edges. So with 10 edges, we can't have a connected graph. The code checks for strong connectivity with a max_no_progress limit of 2000, so it stops removing pairs once it can't maintain that property anymore. Since 10 edges is impossible for connecting 16 nodes, the algorithm will hit that limit and end up keeping more edges than the target density would suggest. So that's 24 total pairs. With 16 nodes needing at least 15 edges for connectivity, the minimum density would be around 0.625 — but the user's mention of 0.4 giving 10 edges doesn't match a connected graph. Maybe they're thinking about undirected pairs versus directed edges, where 0.4 density on 24 possible pairs gives roughly 10 undirected edges or 20 when converted to directed form.
+
+The real constraint here is that 10 pairs isn't enough to keep 16 nodes connected — you need at least 15 for a spanning tree. So the practical range for density would start at 15 pairs minimum and go up to maybe 19 or the full 24, depending on what variation they actually want to test.
+
+But I'm realizing the current implementation draws all 16 grid positions regardless, which means isolated nodes would violate their "no isolation" constraint. Maybe the solution is to work with a smaller subgraph that uses fewer nodes, or I need to rethink how the density parameter actually constrains the graph structure.
+
+Examining the drawing code... I'm counting the possible edges in a 4×4 grid: 12 horizontal pairs and 12 vertical pairs for 24 total. Since a spanning tree needs 15 edges minimum to connect all 16 nodes, 10 pairs simply can't work—there's a fundamental mismatch between the user's edge count and the connectivity requirement.
+
+Let me think about what they might actually mean. Maybe they're thinking of directed edges, or perhaps "density" refers to something other than the grid itself. The safest approach is to treat density as a fraction internally, store the actual edge count in the CSV as a covariate, and acknowledge that the minimum achievable edges for a connected 16-node grid graph will be higher than 10.
+
+Looking at the cyclomatic complexity with undirected pairs, I can map specific edge counts to the desired complexity range: 15 pairs gives cyclomatic 0, and each additional pair increments it by 1, so 20 pairs would give cyclomatic 5. This translates to a density range of roughly 0.625 to 0.833, which is narrower than the original 0.4 to 0.8 target.
+
+The real issue is that a 16-node connected graph has constraints that make the user's requested ranges difficult to achieve simultaneously. I'm reconsidering whether to stick with the 4×4 grid or use a smaller graph, and whether the user's specifications might have some inconsistencies I should work around by implementing what's logically sound: using edge-simple paths as the trail count, cyclomatic complexity as the primary predictor, and ensuring no isolated nodes while adjusting the density range to fit the graph structure. 16 nodes):
+
+Cyclomatic number 0-5 requires 15-20 undirected pairs (density 0.625-0.833)
+But the user wants density 0.4-0.8...
+Hmm, this is a real tension. Maybe the solution is:
+
+Accept that the practical minimum density will be ~0.625 (15 pairs for connectivity)
+Set DENSITY_MIN = 0.40 (but the code will naturally not go below ~0.625 due to connectivity)
+The covariate stored in CSV will be actual pairs, not the target density
+OR maybe the user actually wants to use a smaller effective graph. Like a 4×4 grid but where some nodes can be "inactive" (not connected to anything)... but that contradicts "no node in isolation".
+
+I'm stepping back to think about what makes scientific sense here. The core experiment is about estimating edge-simple trails in a directed graph, where cyclomatic number (the primary predictor) and edge density (covariate) drive the complexity. With a DAG (cyclomatic 0) there are fewer trails, and as cycles increase, the potential trails grow. Given 16 nodes and a cyclomatic range of 0-5, I should set the density bounds to 0.625-0.875 (15-21 pairs) to keep the trail counts manageable at 1-6 per graph. I'm realizing the user might be referring to a different graph structure or counting directed versus undirected edges differently. At density 0.8 with 48 possible directed edges, that gives about 38 directed edges or 19 undirected pairs, which matches their example. But at density 0.4, getting exactly 10 edges while keeping 16 nodes connected is geometrically impossible. I'll make a pragmatic call to use their density bounds as stated, even if it means some graphs at the lower end won't be fully connected. I'm settling on a 4×4 grid with a target cyclomatic complexity range of 0-5, which translates to 15-20 edge pairs and a density of 0.625-0.833. Now I need to implement the actual path counting logic to measure these graph properties accurately.
+
+Writing the path counting function... Finishing the DFS implementation...
+
+I'm realizing that with bidirected edges where every edge has its reverse, and the constraint that we can only traverse each directed edge once, we won't have infinite loops—there are finitely many edges, so any trail must eventually terminate. Even though nodes can be revisited, the edge-simple constraint keeps things bounded.
+
+The real concern is that trail counts could explode exponentially in dense graphs. With a 4×4 grid having 48 directed edges, the number of possible trails could be enormous. That's why the constraint limiting trail counts to 1-6 is crucial—it forces us to construct graphs carefully so they don't have too many paths between start and end nodes.
+
+For graphs with small trail counts, the DFS will run efficiently. Now I'm thinking about using cyclomatic number as a predictor for how many trails exist in a directed graph.
+
+The cyclomatic number formula for undirected graphs is e - v + c, where e is edges, v is vertices, and c is connected components. Since our graph uses bidirected edges, I can compute this based on undirected pairs: cyclomatic = undirected_pairs - 16 + 1 = undirected_pairs - 15. For cyclomatic complexity of 0-5, that means undirected_pairs should be between 15-20. With 15 undirected pairs, we'd have the minimum needed to keep a 16-node graph connected. But I'm wondering if we can actually construct graphs with these specific cyclomatic numbers while maintaining the trail count constraints.
+
+A graph with cyclomatic complexity 0 is essentially a tree—a spanning tree of 16 nodes has exactly 15 undirected edges. If I convert each undirected edge to a bidirected pair, the resulting graph is strongly connected since you can traverse between any two nodes in either direction. So cyclomatic 0 is definitely achievable.
+
+My approach is to generate random graphs with specific cyclomatic numbers, then verify whether their trail counts fall within the target range of 1-6, regenerating as needed if they don't.
+
+I should also ensure no nodes end up isolated after generation, since every node in the grid needs at least one edge.
+
+For the graph generation itself, I'm thinking about starting with a spanning tree to guarantee strong connectivity, then adding extra pairs to reach the target cyclomatic number while keeping all nodes connected.
+
+The trickier constraint is ensuring the path count from start to end stays between 1 and 6—I could use rejection sampling to generate candidate graphs and only accept ones that meet this requirement, which should work fine for small graphs even if it takes a few attempts.
+
+Defining the revised make_graph function... I need to increment the no_progress counter when a removal attempt fails, then return the final edge set. I'm also realizing I need to define a helper function that checks all 16 grid nodes appear in at least one pair—a spanning tree with 15 edges can connect all nodes, so this constraint is achievable.
+
+For the cyclomatic complexity requirement, I'm mapping each target value from 0 to 5 to a specific pair count from 15 to 20, then generating graphs at each level while ensuring the trail count stays between 1 and 6. I also need to track edge density as a metric.
+
+Now I'm working through the math on trail counts for bidirected graphs. With cyclomatic complexity 0 (a spanning tree with 30 directed edges), there's exactly one undirected path between any two nodes, but since edges go both ways, I can traverse forward or backward along that path, plus any detours that return to the original path.
+
+Let me trace through a concrete example: a simple three-node path A-B-C with bidirected edges. From A to C, the direct route is A→B→C, but I need to carefully count what other edge-simple trails exist—whether I can make detours like going back to A and returning without repeating edges. A→B→A→C works since those are all distinct edges. But I'm realizing I need to clarify what defines the end of a trail—does it terminate the first time we reach the destination node, or do we keep going until we can't use any more edges? to stop when we reach C. For the triangle graph, that gives us exactly 3 distinct trails, which aligns with the cyclomatic complexity of 1. I'm noticing that the number of possible trails seems to scale with the cyclomatic number—higher complexity means more paths through the graph. So for a 4×4 grid with cyclomatic values between 0 and 5, I'd expect the trail count to range somewhere from 1 to 6 or possibly higher. The key question now is whether a graph with cyclomatic complexity 0 (a spanning tree) always produces exactly one edge-simple trail, or if there are cases where it could have more.
+
+For a bidirected spanning tree, there's only one undirected path between any two nodes, but edge-simple trails allow nodes to repeat. This means I could theoretically take detours into subtrees and backtrack using the reverse edges. However, when I trace through an example like A-B-C with bidirected edges, going into a subtree and coming back would require reusing an edge in the forward direction, which violates the edge-simple constraint. So it seems like spanning trees should consistently give exactly one trail, but I need to verify this holds across different tree structures.
+
+Actually, looking at the branching example where B has a child B', I can construct multiple valid trails: the direct path A→B→C, but also A→B→B'→B→C where I detour into the B' subtree and return. Both use distinct edges, so they're both valid edge-simple trails. This means even with cyclomatic complexity of zero, the number of trails depends on the tree's structure and where the start and end nodes are positioned. So I can't rely on cyclomatic number alone—I need to actively count and filter trails based on whether they fall within the 1-6 range.
+
+For the study design, the cyclomatic number (0-5) controls how many undirected pairs I include (15-20), which directly determines the trail count outcome I'm measuring. Since cyclomatic complexity equals edges minus 15 for a 16-node connected graph, these are mathematically coupled—they're really the same variable. But the user might want to frame it as cyclomatic number being the predictor of difficulty, testing whether people struggle more with estimating trails in graphs containing more cycles. That's a reasonable hypothesis. I should also reconsider what "more complex loops" means—it might not just be about circuit rank but something else about loop structure I haven't fully captured yet.
+
+Now I'm checking whether a cyclomatic range of 0-5 actually works with trail counts between 1 and 6. Looking at a 4×4 bidirected grid, as cyclomatic complexity increases from 0 to 5, the number of trails should generally increase too. The real constraint is whether high cyclomatic numbers can still produce trail counts that stay within the 1-6 range, or if they'll exceed it.
+
+I'll use rejection sampling to handle this: generate graphs targeting specific cyclomatic numbers, count their edge-simple trails, and only keep those with trail counts in the acceptable range. For balance, I'll aim for roughly equal representation across the six cyclomatic levels, accepting whatever trail count distribution naturally emerges within each level rather than trying to balance both dimensions simultaneously. This means setting up the trial list with explicit cyclomatic values instead of density parameters. Implementing the trail-counting approach instead of path-counting, which means switching to edge-simple paths. I need to add a cyclomatic number function that calculates the number of independent cycles in the graph based on edges, vertices, and connectivity.
+
+Defining helper functions to ensure no isolated nodes exist and modifying the graph generation to use rejection sampling on trail counts rather than density parameters.
+
+Now I'm setting up the trial configuration to systematically vary cyclomatic complexity from 0 to 5, which maps to 15-20 undirected edge pairs, and balancing the number of trails across a range of 1-6 per trial. I also need to update the CSV output to track both cyclomatic complexity and edge count, then recalibrate the edge range in the config based on the user's feedback about the actual density constraints.
+
+The user wants to make several changes to the experiment. Let me understand each one:
+
+Within a single path, an edge cannot be visited more than once (but a node can) - This changes the path definition from "simple paths" (no node revisited) to paths where nodes can be revisited but edges cannot. This is sometimes called "trail" in graph theory.
+
+Limit of possible paths ranging as an outcome variable between 1 to 6 paths max. FIX - everyone will see N number of given paths - The number of paths (trails) should be controlled to be between 1 and 6. Every participant will see graphs with exactly N paths.
+
+The cyclomatic complexity (number of independent cycles) will be the predictor variable, ranging from 0 to 5 - I need to calculate this using the formula e - v + c to measure the structural complexity of each graph.
+
+Graph density will be a covariate controlled as a discrete edge count, ranging from 10 edges (0.4 density) to 19 edges (0.8 density) - This gives me a specific range to work with when generating the graphs.
+
+Every node must have at least one connection - No isolated vertices are allowed in the graphs.
+
+Now I'm reconsidering the implementation details. I need to switch from tracking visited nodes to tracking visited edges when counting paths, so nodes can be revisited but edges cannot. I also need to ensure the path count stays between 1 and 6 during graph generation.
+
+Looking back at the constraint about "everyone will see N number of given paths" - I think the number of paths is actually the outcome variable that participants estimate, and it's balanced across trials. For the cyclomatic number calculation, I'm checking whether it should be e - v + c or e - v + 2c for directed graphs, though the user specified e - v + c.
+
+For an undirected graph, the cyclomatic number is e - v + c where c is the number of connected components. On a 4x4 grid with 16 nodes, if it's connected, that's e - 16 + 1 = e - 15. With just 10 edges, I'd get a negative value, which indicates the graph is a forest or tree rather than having cycles.
+
+Actually, I'm realizing the constraint "no node in isolation" doesn't mean the entire graph is connected—it just means every node has at least degree 1. With 10 edges and 16 nodes, I can't connect everything into one component since a spanning tree needs 15 edges. Let me recalculate the edge density: a 4x4 grid has 24 possible edges, so 0.4 density gives about 10 edges and 0.8 density gives about 19 edges. I'm realizing the constraints might be mathematically impossible with the given parameters—a connected undirected graph with 16 nodes needs at least 15 edges, but we only have 10. Maybe the user is thinking of this differently, like allowing multiple disconnected components or relaxing the strong connectivity requirement to just ensure every node has at least one connection and the start/end nodes can reach each other. + 1 = 4 (if one connected component)
+
+So with 19 undirected edges in a connected graph, the cyclomatic number would be 4, which fits within the stated range. Let me verify this makes sense: for a 16-node connected subgraph, I need at least 15 edges to form a tree, and each additional edge creates one independent cycle, so the cyclomatic number equals the number of edges beyond the minimum spanning tree.
+
+But there's a tension here—the user specifies a minimum density of 10 edges, which wouldn't keep all 16 nodes connected. This suggests the graph might have multiple components, which would increase the cyclomatic number formula to e - v + c. I think I should just implement what the user described and let the constraints work themselves out: generate graphs with cyclomatic numbers ranging from 0 to 5 using edge counts between 10 and 19. The cyclomatic complexity formula for a graph with weakly connected components is e - v + c, so with 10 edges and 16 nodes, I get 10 - 16 + c = c - 6, meaning I need at least 6 components to achieve a cyclomatic complexity of 0. I'm realizing I should stop trying to force the math to work and instead focus on what the user actually wants: implementing edge-based path counting where edges can't be revisited but nodes can be. I'm working through the cyclomatic complexity calculation—for a spanning tree of 16 nodes I need 15 edges to connect everything, which gives cyclomatic = 0, and each additional edge increments it by 1. So with 10 to 19 edges total, I can achieve cyclomatic values from 0 to 5, though I need to account for the possibility that not all nodes are fully connected as long as none are isolated.
+
+Actually, I'm realizing the cyclomatic number might be calculated differently depending on whether the graph is fully connected or has multiple components. But stepping back, maybe I'm overcomplicating this—the user might just want cyclomatic number and density as predictor variables to measure their relationship with some outcome, rather than needing the graph to hit specific cyclomatic targets.
+
+So the study design would be: generate graphs with varying numbers of actual paths (1-6 as the controlled variable), measure their cyclomatic complexity and density as predictors, and see how well participants estimate the path count. The key distinction is that cyclomatic number isn't being controlled—it's being measured as a predictor variable alongside density, while the actual path count is what's being systematically varied.
+
+For implementation, I need to shift from counting simple paths (where nodes can't repeat) to counting trails (where edges can't repeat but nodes can), which requires tracking edges instead of nodes during the depth-first search.
+
+Implementing the trail-counting logic...
+
+But I'm realizing this approach could get computationally expensive—a 4x4 grid with bidirectional edges could have exponentially many trails, and the trail count will be vastly larger than path counts, making it tricky to generate graphs with exactly 1-6 trails as intended.
+
+I need to clarify what "edges can't be visited more than once" means in a bidirectional context. If I traverse edge (u,v) in one direction, can I still traverse (v,u) in the reverse direction, or does using an edge block both directions?
+
+Given that the graph displays double-headed arrows as single visual edges, I think an "edge" refers to the undirected pair {u,v}, meaning using it in either direction consumes that edge. So in a cycle like A-B-C-A with bidirectional connections, a trail would need to respect this constraint. Let me reconsider this more carefully. If I go A→C, that uses the A-C edge, so I can't use it again. From C, I could go to B using B-C, then from B I could go to A using A-B, but that leaves me at A, not at C where I need to end up. So A→C→B→A doesn't work as a trail to C since the destination is wrong and I've already exhausted the A-C edge anyway.
+
+For this triangle graph with edges A-B, B-C, and A-C, the valid trails from A to C are just A→C directly and A→B→C, giving me a count of 2.
+
+Now I'm considering what happens with cycles. If I add a cycle A-B-C-A on top of the direct A-C edge, I need to carefully track which edges I've used. When I traverse A→B→C→A→C, I'm visiting C twice—once as an intermediate node and once as the final destination—but the question is whether I can reuse the B-C edge or if that violates the trail definition.
+
+Let me work through a clearer example with a 4-cycle plus diagonal. In a graph with nodes A, B, C, D forming a cycle and an A-C diagonal, the simple paths from A to C are just the direct route, the path through B, and the path through D—three total. For trails, where I can revisit nodes but not edges, I'd have more options since I could loop around and approach C from different directions without repeating edges. I need to clarify what "trail ending at C" means—once we reach C, do we stop immediately, or can we pass through it and continue? Looking at the original logic, when we hit the destination we increment the count and return, so C is strictly the endpoint. That means any valid trail must terminate as soon as we reach C, even if we could theoretically revisit nodes elsewhere. I'm realizing that if nodes can be revisited while only edges can't, the number of possible trails explodes dramatically—potentially thousands for a 4x4 grid. This makes me wonder if the user's expectation of 1-6 trails means they're thinking of something simpler, or perhaps the no-edge-revisit constraint is what keeps the numbers manageable in practice. I'm settling on the approach: generate graphs with a controlled number of trails (1-6), use cyclomatic complexity as a predictor, and vary discrete edge counts (10-19 pairs) as a density covariate while ensuring no isolated nodes. The trial list will systematically vary the number of trails as the key outcome variable. balanced)
+
+stim_time - stimulus duration
+And we record:
+
+N (controlled)
+cyclomatic number (measured predictor)
+edge count / density (covariate)
+Wait, but if N is the controlled variable, we need to generate graphs with exactly N trails. And then cyclomatic number is what we measure from those graphs. Density (edge count) is a covariate that will vary with the graph.
+
+So the graph generation becomes:
+
+Randomly generate a graph (with density as a random variable or controlled?)
+Count trails
+Accept if trail count matches target N
+But the density should also be a covariate, so we might want to balance density across N levels.
+
+Hmm, let me re-read the user's request: "min and max density: it is covariate as discrete number ranging from (0.4 - 10 edges to 0.8 (19 edges)".
+
+So density varies naturally across trials within the constraints of 10-19 edges, and I'll record the exact edge count as a covariate. The primary controlled variable is N trails (1-6), balanced across stimulus times (3, 5, 7 seconds), while cyclomatic number and edge count emerge from the graph generation process and get measured as predictors and covariates respectively.
+
+Now I'm thinking through the trial structure and implementation details for counting trails in the graph.
+
+Implementing trail counting... I see the issue now—the DFS could theoretically run forever with cycles, but since each undirected edge can only be used once in a trail, the search naturally terminates when all edges are exhausted. The real concern is performance: with up to 19 edges, we're looking at potentially factorial time complexity in the worst case, though the actual graph structure and constraints should keep it manageable for smaller trail counts. Now I'm working on a function to generate graphs with a specific target number of trails, iterating through different edge configurations until finding one that matches the desired count. I'm concerned about the no-isolated-nodes constraint—with a 4x4 grid and only 10 edges, it's likely some nodes won't connect to any selected edge. I also need to verify that _has_path correctly checks for a directed path from start to end, and I'm reconsidering whether strong connectivity is actually required or if allowing dead-end paths is acceptable given the user's constraints.
+
+I'll go with no-isolated-nodes plus ensuring a path exists from start to end rather than full strong connectivity. Now I'm implementing the cyclomatic number calculation for undirected graphs using the formula e - v + c, where I'll count connected components with BFS...
+
+Implementing cyclomatic calculation...
+
+For the no-isolated-nodes check, I'm questioning whether every single cell in the 4x4 grid needs an edge, or just the nodes that actually appear in the edge list.
+
+Looking at the math: with only 10 edges and 16 nodes, it's mathematically impossible to connect all nodes unless some edges form a connected component. A single edge connects 2 nodes, so 10 edges can connect at most 20 node-endpoints, but that's only if they're all disjoint. To cover all 16 nodes with 10 edges, I'd need them arranged efficiently—like a tree or path structure—but even then, I'm not sure it's feasible. Let me think about whether the constraint actually requires full coverage or just means "no isolated nodes in the graph that's actually drawn." I'm realizing that with a 4x4 grid, finding 10 edges that cover all 16 nodes is quite restrictive—the probability of randomly selecting edges that achieve this is low, so I'd likely need rejection sampling or to adjust the constraints. Given that the density parameter maps to roughly 10 edges at the lower bound (0.4 × 24), I should reconsider whether the current approach is feasible or if I need to relax the requirements.
+
+For generation, I think the pragmatic approach is to build the graph by first ensuring no isolated nodes exist, then count the trails and accept if they match the target. The user's "no isolation" constraint in a grid context probably just means avoiding disconnected nodes visually, so all 16 nodes should have at least one edge.
+
+My strategy: sample edges uniformly from the possible pairs, check that all constraints are satisfied (no isolated nodes, a path exists between start and end, and the trail count matches), and use rejection sampling if needed. To handle the no-isolated constraint with only 10 edges, I can greedily build a spanning forest first to cover all nodes, then add more edges up to reach the target count.
+
+Now I'm reviewing what needs to change in the exp.py file...
+
+Updating configuration parameters...
+
+Now I need to think through the implementation details: updating the trial generation to use the new trail-counting functions instead of path-counting, modifying the data recording to capture cyclomatic complexity and edge counts, and making sure the main execution flow calls everything correctly. There's a performance concern though—counting trails in dense graphs could get expensive, so I should consider optimization strategies.
+
+For the graph sizes we're working with (10-19 undirected edges), a DFS-based trail counter should be feasible since the maximum trail length is bounded by the edge count and branching is limited by the adjacency structure. Even in worst cases like a complete graph, the practical trail counts for our target range should stay manageable. But I'm realizing that trails allow node revisitation, which means the count can explode compared to simple paths—I need to think through whether this will actually work for our use case.
+
+Let me trace through a concrete example: a 4-cycle with a diagonal edge. From node A to C, I can form trails like the direct edge, paths through B or D, and longer trails that revisit nodes without repeating edges. For instance, going A→B→C→D→A→C uses all 5 edges exactly once and ends at the target, which is valid. There are multiple such trails possible, and I need to verify whether the count stays reasonable for our graph sizes. → at C, count! Trail: A-C ✓
+
+A→D: (A-D used)
+D→C: (C-D used) → at C, count! Trail: A-D-C ✓
+D→A: (A-D already used) skip
+I need to trace through this more systematically. After exploring A→B→C and counting that trail, I backtrack. Then A→C counts immediately. Then A→D→C counts as another trail. But I'm not capturing the longer paths yet—I need to continue the DFS after reaching C to see if there are trails that pass through C and continue onward.
+
+Let me reconsider the recursion: when I'm at node B with A-B already used, I can try going to C. Once at C, I count that path, but I should also continue exploring from C if there are unused edges. Similarly, when I reach C via A→D→C, I should check if C has outgoing edges I haven't used yet.
+
+Now testing with a 4-cycle graph where A connects to B and D, B connects to C, C connects to D, and D loops back to A. Starting from A and ending at C, the simple paths are A→B→C and A→D→C, giving 2 paths. For trails, I'm exploring whether revisiting nodes through different edges creates additional valid routes—like going A→B→A→D→C if that uses only distinct edges. So there are 4 simple paths total. Now I'm tracing through the trails where edges can't be revisited—running a depth-first search from A to find all ways to reach C without reusing any edges. The search explores each branch systematically: going through B first with various continuations, then trying the direct A-D route, checking which paths successfully terminate at C.
+
+I'm noticing that in this graph, the trail count matches the simple path count, which makes sense when cycles necessarily pass through the source or destination nodes. Let me construct a different graph where trails and simple paths actually diverge—something with a cycle that doesn't involve A or C, so you could traverse it without affecting the path count but could use it as a detour in a trail.
+
+With edges A-B, A-C, B-D, and D-A, I'm checking both simple paths and trails from A to C. There's only one simple path (the direct A-C), but for trails I'm exploring all possible edge sequences without repeating edges. I'm working through the DFS, finding the direct route counts, then checking paths that loop through B and D before reaching C.
+
+The key insight is that trails allow revisiting nodes as long as edges aren't repeated, so paths like A-B-D-A-C become valid trails even though A appears twice. This gives us three total trails versus just one simple path, showing how significantly the counts can differ in graphs with cycles. For a dense 4x4 grid with many bidirectional edges, the trail count could grow substantially, so I need to make sure the implementation handles this correctly.
+
+The DFS approach will terminate since each step consumes one edge and we're bounded by 19 total edges, but the real concern is performance during graph generation—most dense candidates will exceed the 6-trail threshold, so I should add early termination to stop counting once we exceed the limit rather than exhaustively exploring all possibilities.
+
+Implementing trail counting code...
+
+Now I'm reconsidering the trial structure—the user specified PATH_COUNTS as the controlled variable ranging from 1 to 6, with stimulus duration as a covariate. So I need to restructure the trial list to balance across path count and stimulus time combinations, which gives me 18 possible pairings. With 50 trials per block, that's roughly 2-3 trials per combination. I'll update the trial generation to return target trail counts and stimulus times instead of density values, and for practice trials I should probably use simpler graphs with fewer paths.
+
+For the graph generation itself, I'm shifting away from the edge-removal approach. Instead, I'll randomly sample edges from the possible pairs, validate that there are no isolated nodes and a path exists from start to end, then count the trails with a termination limit and accept the graph if it matches the target trail count. Since density is actually a covariate measured by edge count (ranging from 4 to 19 edges based on the 0.4 to 0.8 range), I should randomly sample within that range rather than controlling it.
+
+For the visualization feedback, the trail coloring should work the same way as the current path coloring—each trail gets a different color from the palette, and edges are assigned colors based on which trail they belong to. The existing edge coloring logic already handles nodes and edges appearing multiple times across different trails.
+
+Now I'm ready to implement the changes: updating the config parameters, adding the new helper functions for graph validation and trail analysis, converting the graph generation to work with trails, updating the trial structure to use the new PATH_COUNTS, and recording the additional metrics in the output.
+
+Writing the updated code... I'm deciding to stick with 50 trials even though it's not a perfect multiple of 18, accepting that some path count combinations will appear slightly more often than others. Now I need to implement the core logic, particularly handling cases where the graph generation fails and ensuring the trail counting performs efficiently.
+
+Writing the helper functions... Writing graph traversal functions... Writing the graph generation logic...
+
+I'm checking whether the sampled edges form a valid graph by verifying there are no isolated nodes and that a path exists between start and end. If the trail count matches the target, I return the edges; otherwise I retry. I'm also realizing that since the graph is bidirectional, connectivity is simpler to reason about—as long as both nodes are in the same connected component, they can reach each other.
+
+Now I'm working on the trial list generation function that distributes path counts and stimulus times across trials, using random sampling to ensure even coverage.
+
+I'm also defining the CSV output fields that will track the graph properties like edge count and cyclomatic complexity alongside the experimental data.
+
+For cleanup, I should remove the old path-counting functions since they're replaced by the trail-based approach, and drop the strong connectivity check since that's no longer a requirement.
+
+Now I'm reconsidering the performance implications of make_trail_graph, particularly for sparse graphs where finding exactly one trail might be difficult or impossible. For a typical 10-edge subgraph of the 4x4 grid, the graph is quite disconnected, which severely limits the number of possible trails between any two nodes.
+
+I should add a fallback mechanism where if generation fails after a reasonable number of attempts, the function returns None and lets the caller decide whether to skip that trial or retry with a different target. This way, the experiment remains robust even when certain trail counts are hard to generate.
+
+I'm also questioning whether the _has_path function correctly handles the undirected nature of the edges when counting trails.
+
+Updating the experiment file now... I need to update the feedback message in run_trial to reflect the new trails-based logic instead of paths, and then I'm ready to implement all these changes across the file. I'm planning the exact string replacements I need to make to the file. First, I'll update the config section to swap density constants for edge count constants and add the PATH_COUNTS list. Then I'll replace the graph generation functions with the new trail-based versions. After that, I'll update run_trial to use count_trails instead of count_paths, and modify make_trial_list to work with PATH_COUNTS. Finally, I'll update the run() function with the new fields and graph generation logic.
+
+Let me start making these targeted edits now. I need to be careful about how I handle early termination in the path-counting logic—during graph generation I want it to stop early, but when counting for the actual experiment trials I need the full count.
+
+Writing the count_trails function... I'm identifying which functions need to be replaced versus kept—I'll remove _strongly_connected, make_graph, count_paths, and all_paths, but keep _has_path since it's still needed for constraint checking. Then I'll add the new functions make_trail_graph, count_trails, all_trails, _no_isolated_nodes, and cyclomatic_number to handle the updated logic.
+
+Writing the replacement code... I'm implementing the cyclomatic complexity formula by collecting all nodes and normalizing edges to an undirected representation, then counting connected components using depth-first search to compute e - v + c.
+
+Now I'm working on a function that generates a random subgraph of a 4×4 grid with specific constraints: no isolated nodes, a valid path between start and end points, and exactly the target number of edge-disjoint trails connecting them. The approach samples random edges within a bounded range and validates each candidate graph against these requirements.
+
+Implementing the trail-counting logic... Completing the DFS traversal to enumerate all trails by exploring adjacent nodes and backtracking through the edge usage tracking. I'm also noting that the forward references to count_trails and _canonical_pair within make_trail_graph aren't problematic since function calls are resolved at runtime rather than definition time.
+
+I should reorganize the function definitions to put helper functions like _canonical_pair before the functions that call them, and place count_trails before make_trail_graph to make the dependency chain clearer. With that structure in place and the knowledge that all_trails will produce a manageable number of results given the constraints, I'm ready to write out the implementation.
+
+Now I need to update the trial logic where count_paths and all_paths get replaced with their trail equivalents. Updating the function calls...
+
+For make_trial_list, I'm creating a function that distributes trials evenly across different stimulus timing and graph density parameters, then shuffles them together into random pairs.
+
+For run(), the FIELDS are being updated to replace 'density' with 'path_count' and adjust the recorded data accordingly.
+
+Updating the save function... Finishing the save call and flushing the file. Now I'm setting up the practice trial loop—for each trial I'm randomly selecting a node pair, potentially swapping the start and end points, generating a graph with the specified density, running the trial, and saving the results if the participant didn't quit early. Completing the main trial loop...
+
+Now I'm checking whether I still need numpy after these changes. The make_trial_list function no longer uses np.arange, but numpy is still imported elsewhere in the code for the np.hypot call in _bidir_arrow, so I'll keep that import. I have a complete plan for the edits, so let me start executing them sequentially since each one depends on the previous state being correct.
+
+Let me read the current file to confirm the exact text before making edits.
+
+Read c:\Users\huzva\OneDrive - Univerzita Karlova\4. ročník\LS\psychofyzika\project\psyphy\exp.py (lines 12-36)
+You've hit your limit · resets 8:40pm (Europe/Prague)
