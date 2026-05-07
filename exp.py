@@ -22,6 +22,7 @@ RESPONSE_WINDOW   = 5.0      # seconds participant has to type answer
 FEEDBACK_TEXT_SEC  = 5.0      # seconds to show correct-answer text only (practice)
 FEEDBACK_PATHS_SEC = 2.0      # seconds to show each individual trail (practice)
 OUTPUT_DIR        = 'data'   # folder for CSV output
+WINDOWED_SIZE     = (1600, 1200)  # window size in pixels when using --windowed
 
 # Valid start↔end pairs — outer-layer non-corner nodes on opposite sides.
 # Each trial randomly picks one pair and randomly assigns which is start/end.
@@ -494,8 +495,10 @@ def run():
     ts    = datetime.now().strftime('%Y%m%d_%H%M%S')
     fname = os.path.join(OUTPUT_DIR, f'sub-{pid}_{ts}.csv')
 
-    win = visual.Window(fullscr=not args.windowed, color=BG_COLOR, units='norm',
-                         allowGUI=args.windowed)
+    win = visual.Window(fullscr=not args.windowed,
+                        size=WINDOWED_SIZE if args.windowed else None,
+                        color=BG_COLOR, units='norm',
+                        allowGUI=args.windowed)
 
     FIELDS = ['pid', 'block', 'trial', 'start', 'end',
               'edge_count', 'cyclomatic', 'stim_time', 'edges',
