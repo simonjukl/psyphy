@@ -57,11 +57,16 @@ PATH_PALETTE = [
 import os
 import csv
 import random
+import argparse
 from datetime import datetime
 from collections import defaultdict
 
 import numpy as np
 from psychopy import visual, core, event, gui
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--windowed', action='store_true', help='Run in a window instead of fullscreen')
+args = parser.parse_args()
 
 
 # ── Graph generation ─────────────────────────────────────────
@@ -489,8 +494,8 @@ def run():
     ts    = datetime.now().strftime('%Y%m%d_%H%M%S')
     fname = os.path.join(OUTPUT_DIR, f'sub-{pid}_{ts}.csv')
 
-    win = visual.Window(fullscr=True, color=BG_COLOR, units='norm',
-                         allowGUI=False)
+    win = visual.Window(fullscr=not args.windowed, color=BG_COLOR, units='norm',
+                         allowGUI=args.windowed)
 
     FIELDS = ['pid', 'block', 'trial', 'start', 'end',
               'edge_count', 'cyclomatic', 'stim_time', 'edges',
