@@ -14,10 +14,10 @@ GRID_SIZE         = 4
 EDGE_COUNT_MIN    = 15       # minimum undirected edges (spanning tree — ensures full connectivity)
 EDGE_COUNT_MAX    = 19       # maximum undirected edges (≈ density 0.8)
 PATH_COUNTS       = [1, 2, 3, 4, 5, 6]   # controlled trail counts (outcome variable)
-TRIALS_PER_BLOCK  = 54       # main trials — multiple of 18 (6 counts × 3 times)
-PRACTICE_TRIALS   = 20       # number of practice trials
-PRACTICE_STIM_SEC = 5.0      # stimulus duration during practice (s)
-STIM_TIMES        = [3.0, 5.0, 7.0]   # randomly balanced across main trials
+TRIALS_PER_BLOCK  = 54       # main trials — multiple of 18 (6 path_count × 3 times)
+PRACTICE_TRIALS   = 10       # number of practice trials
+PRACTICE_STIM_SEC = 3.5      # stimulus duration during practice (s)
+STIM_TIMES        = [2, 3.5, 5]   # randomly balanced across main trials
 RESPONSE_WINDOW   = 5.0      # seconds participant has to type answer
 FEEDBACK_TEXT_SEC  = 5.0      # seconds to show correct-answer text only (practice)
 FEEDBACK_PATHS_SEC = 2.0      # seconds to show each individual trail (practice)
@@ -359,6 +359,8 @@ def get_response(win, time_limit):
                              height=TEXT_HEIGHT * 1.5, color='#111111')
     timer = visual.TextStim(win, pos=(0, -0.25),
                              height=TEXT_HEIGHT * 0.7, color='#888888')
+    hint  = visual.TextStim(win, text='SPACE  to confirm',
+                             pos=(0, -0.42), height=TEXT_HEIGHT * 0.65, color='#bbbbbb')
 
     text = ''
     rt   = None
@@ -369,10 +371,10 @@ def get_response(win, time_limit):
         timer.setText(f'{time_limit - t:.1f} s')
 
         for k in event.getKeys(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-                                  'backspace', 'return', 'escape']):
+                                  'backspace', 'space', 'escape']):
             if k == 'escape':
                 return _ESCAPE, None
-            if k == 'return':
+            if k == 'space':
                 if text:
                     return int(text), rt
             elif k == 'backspace':
@@ -388,6 +390,7 @@ def get_response(win, time_limit):
         box.draw()
         disp.draw()
         timer.draw()
+        hint.draw()
         win.flip()
 
     return (int(text) if text else None), rt
@@ -411,22 +414,48 @@ def run_trial(win, edges, start, end, stim_time, practice=False):
     if response is _ESCAPE:
         return None
 
+    # Participant-paced break — SPACE when ready to continue
+    rdy = visual.TextStim(win, text='· · ·\n\nPress  SPACE  when ready',
+                           pos=(0, 0), height=TEXT_HEIGHT * 0.9,
+                           color='#999999', alignText='center')
+    rdy.draw()
+    win.flip()
+    if 'escape' in event.waitKeys(keyList=['space', 'escape']):
+        return None
+
     if practice:
         paths   = all_trails(edges, start, end)
         n_shown = min(len(paths), len(PATH_PALETTE))
         ans_str = str(response) if response is not None else '—'
         mark    = '✓' if response == correct else '✗'
 
-        # Phase 1: text only — correct answer (SPACE to skip)
-        txt_lines = (f'Correct answer: {correct}      Your answer: {ans_str}  {mark}\n\n'
-                     f'{n_shown} path{"s" if n_shown != 1 else ""} will be shown next.\n\n'
-                     f'[SPACE to skip]')
-        txt_stim = visual.TextStim(win, text=txt_lines, pos=(0, 0),
-                                    height=TEXT_HEIGHT * 1.1, color='#111111',
-                                    alignText='center')
+        # Phase 1: feedback text — big, coloured ✓/✗ (SPACE to skip)
+        mark_color = '#22cc55' if response == correct else '#cc2222'
+        mark_label = '✓   CORRECT' if response == correct else '✗   WRONG'
+        s_corr = visual.TextStim(win,
+                     text=f'Correct answer:  {correct}',
+                     pos=(0, 0.32), height=TEXT_HEIGHT * 1.4,
+                     color='#111111', bold=True, alignText='center')
+        s_your = visual.TextStim(win,
+                     text=f'Your answer:  {ans_str}',
+                     pos=(0, 0.08), height=TEXT_HEIGHT * 1.4,
+                     color='#333333', alignText='center')
+        s_mark = visual.TextStim(win,
+                     text=mark_label,
+                     pos=(0, -0.20), height=TEXT_HEIGHT * 1.9,
+                     color=mark_color, bold=True, alignText='center')
+        s_next = visual.TextStim(win,
+                     text=f'{n_shown} path{"s" if n_shown != 1 else ""} will be shown next.',
+                     pos=(0, -0.50), height=TEXT_HEIGHT * 0.95,
+                     color='#555555', alignText='center')
+        s_skip = visual.TextStim(win,
+                     text='[SPACE to continue]',
+                     pos=(0, -0.68), height=TEXT_HEIGHT * 0.75,
+                     color='#aaaaaa', alignText='center')
         clock = core.Clock()
         while clock.getTime() < FEEDBACK_TEXT_SEC:
-            txt_stim.draw()
+            s_corr.draw(); s_your.draw(); s_mark.draw()
+            s_next.draw(); s_skip.draw()
             win.flip()
             if 'space' in event.getKeys(['space']):
                 break
@@ -434,11 +463,13 @@ def run_trial(win, edges, start, end, stim_time, practice=False):
         # Phase 2: one trail at a time, FEEDBACK_PATHS_SEC each (SPACE skips to next)
         for t_idx, trail in enumerate(paths[:n_shown]):
             single_stims = graph_stims(win, edges, start, end, paths=[trail])
+            mark_color = '#22cc55' if response == correct else '#cc2222'
             trail_hdr = visual.TextStim(
                 win,
                 text=(f'Correct: {correct}   Your: {ans_str}  {mark}'
-                      f'   Trail {t_idx + 1} / {n_shown}   [SPACE next]'),
-                pos=(0, 0.88), height=TEXT_HEIGHT * 0.8, color='#222222')
+                      f'        Trail {t_idx + 1} / {n_shown}   [SPACE next]'),
+                pos=(0, 0.91), height=TEXT_HEIGHT * 1.0,
+                color=mark_color, bold=True)
             clock = core.Clock()
             while clock.getTime() < FEEDBACK_PATHS_SEC:
                 _draw(single_stims)
@@ -496,7 +527,7 @@ def run():
     fname = os.path.join(OUTPUT_DIR, f'sub-{pid}_{ts}.csv')
 
     win = visual.Window(fullscr=not args.windowed,
-                        size=WINDOWED_SIZE if args.windowed else None,
+                        size=WINDOWED_SIZE if args.windowed else WINDOWED_SIZE,
                         color=BG_COLOR, units='norm',
                         allowGUI=args.windowed)
 
@@ -529,11 +560,11 @@ def run():
         # ── Practice block ────────────────────────────────────
         splash(win,
                'PRACTICE\n\n'
-               'A directed graph will appear briefly.\n'
+               'A undirected graph will appear briefly.\n'
                'Count the number of paths from the GREEN node to the RED node.\n'
-               'Arrows show the allowed direction of travel, no edge cannot be visited twice (nodes may repeat).\n'
+               'Each edge can be visited only once (nodes may repeat).\n'
                'After each trial the correct answer and all paths will be shown.\n\n'
-                'This practice block will take around 5 minutes.\n'
+                'This practice block will take around 3 minutes.\n'
                'Press SPACE to begin.')
 
         for i, (target_trails, _) in enumerate(make_trial_list(PRACTICE_TRIALS)):
