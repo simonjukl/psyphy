@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Psychophysical experiment: Path estimation in directed graphs.
-Participants briefly view a directed graph and estimate the number of
-trails (each undirected edge traversed at most once; nodes may repeat)
+Psychophysical experiment: Path estimation in undirected graphs.
+Participants briefly view a undirected graph and estimate the number of
+paths from the GREEN node to the RED node (each undirected edge traversed at most once; nodes may repeat)
 from the green (start) to the red (end) node.
 """
 
@@ -14,10 +14,11 @@ GRID_SIZE         = 4
 EDGE_COUNT_MIN    = 15       # minimum undirected edges (spanning tree — ensures full connectivity)
 EDGE_COUNT_MAX    = 19       # maximum undirected edges (≈ density 0.8)
 PATH_COUNTS       = [1, 2, 3, 4, 5, 6]   # controlled trail counts (outcome variable)
-TRIALS_PER_BLOCK  = 54       # main trials — multiple of 18 (6 path_count × 3 times)
+TRIALS_PER_BLOCK  = 54       # trials per main block — multiple of 6 (9 reps × 6 path_counts)
+N_MAIN_BLOCKS     = 3        # one block per stim_time; order counterbalanced by PID
 PRACTICE_TRIALS   = 10       # number of practice trials
-PRACTICE_STIM_SEC = 3.5      # stimulus duration during practice (s)
-STIM_TIMES        = [2, 3.5, 5]   # randomly balanced across main trials
+PRACTICE_STIM_SEC = 3        # stimulus duration during practice (s)
+STIM_TIMES        = [1, 3, 5]   # one per main block; order determined by Latin square
 RESPONSE_WINDOW   = 5.0      # seconds participant has to type answer
 FEEDBACK_TEXT_SEC  = 5.0      # seconds to show correct-answer text only (practice)
 FEEDBACK_PATHS_SEC = 2.0      # seconds to show each individual trail (practice)
@@ -362,6 +363,7 @@ def get_response(win, time_limit):
     hint  = visual.TextStim(win, text='SPACE  to confirm',
                              pos=(0, -0.42), height=TEXT_HEIGHT * 0.65, color='#bbbbbb')
 
+    event.clearEvents()   # flush any keys typed before the box opened
     text = ''
     rt   = None
     clock = core.Clock()
@@ -483,22 +485,28 @@ def run_trial(win, edges, start, end, stim_time, practice=False):
 
 # ── Trial list ────────────────────────────────────────────────
 
-def make_trial_list(n):
-    """
-    Return list of (target_trails, stim_time) tuples, length n.
-    Both PATH_COUNTS and STIM_TIMES are balanced across trials.
-    """
-    n_per_t = n // len(STIM_TIMES)
-    times   = STIM_TIMES * n_per_t + random.choices(STIM_TIMES,
-                                                      k=n % len(STIM_TIMES))
-
+def make_path_list(n):
+    """Return shuffled list of n target trail counts, balanced across PATH_COUNTS."""
     n_per_p = n // len(PATH_COUNTS)
-    paths   = PATH_COUNTS * n_per_p + random.choices(PATH_COUNTS,
-                                                      k=n % len(PATH_COUNTS))
-
-    random.shuffle(times)
+    paths   = PATH_COUNTS * n_per_p + random.choices(PATH_COUNTS, k=n % len(PATH_COUNTS))
     random.shuffle(paths)
-    return list(zip(paths, times))
+    return paths
+
+
+# 6 orderings of 3 stim_times — index by PID to counterbalance across participants
+_LATIN_SQUARE = [
+    [1, 3, 5], [1, 5, 3],
+    [3, 1, 5], [3, 5, 1],
+    [5, 1, 3], [5, 3, 1],
+]
+
+def block_stim_order(pid):
+    """Return [s1, s2, s3] stim_time order for this participant via Latin square."""
+    try:
+        idx = int(pid) % 6
+    except ValueError:
+        idx = sum(ord(c) for c in pid) % 6
+    return _LATIN_SQUARE[idx]
 
 
 # ── Splash screen ─────────────────────────────────────────────
@@ -567,7 +575,7 @@ def run():
                 'This practice block will take around 3 minutes.\n'
                'Press SPACE to begin.')
 
-        for i, (target_trails, _) in enumerate(make_trial_list(PRACTICE_TRIALS)):
+        for i, target_trails in enumerate(make_path_list(PRACTICE_TRIALS)):
             start, end = random.choice(NODE_PAIRS)
             if random.random() < 0.5:
                 start, end = end, start
@@ -579,25 +587,32 @@ def run():
                 break
             save('practice', i, start, end, edges, PRACTICE_STIM_SEC, res)
 
-        # ── Main block ────────────────────────────────────────
-        splash(win,
-               'MAIN BLOCK\n\n'
-               'The experiment now begins.\n'
-               'No feedback will be provided after each trial.\n\n'
-               'This block will take around 15-20 minutes.\n'
-               'Press SPACE to continue.')
+        # ── Main blocks (3 × 54 trials, one stim_time per block) ─────
+        stim_order = block_stim_order(pid)
+        for block_num, stim_time in enumerate(stim_order, start=1):
+            sec_label = f'{stim_time} second{"s" if stim_time != 1 else ""}'
+            splash(win,
+                   f'BLOCK  {block_num} / {N_MAIN_BLOCKS}\n\n'
+                   f'Each graph will be shown for  {sec_label}.\n'
+                   'No feedback will be given.\n\n'
+                   'Press SPACE to begin.')
 
-        for i, (target_trails, stim_time) in enumerate(make_trial_list(TRIALS_PER_BLOCK)):
-            start, end = random.choice(NODE_PAIRS)
-            if random.random() < 0.5:
-                start, end = end, start
-            edges = make_trail_graph(target_trails, start, end)
-            if edges is None:
-                continue
-            res = run_trial(win, edges, start, end, stim_time, practice=False)
-            if res is None:
+            aborted = False
+            for i, target_trails in enumerate(make_path_list(TRIALS_PER_BLOCK)):
+                start, end = random.choice(NODE_PAIRS)
+                if random.random() < 0.5:
+                    start, end = end, start
+                edges = make_trail_graph(target_trails, start, end)
+                if edges is None:
+                    continue
+                res = run_trial(win, edges, start, end, stim_time, practice=False)
+                if res is None:
+                    aborted = True
+                    break
+                save(block_num, i, start, end, edges, stim_time, res)
+
+            if aborted:
                 break
-            save('main', i, start, end, edges, stim_time, res)
 
         splash(win, 'Experiment complete.\nThank you!\n\nPress SPACE to exit.')
 
