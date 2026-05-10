@@ -13,7 +13,7 @@ from the green (start) to the red (end) node.
 GRID_SIZE         = 4
 EDGE_COUNT_MIN    = 15       # minimum undirected edges (spanning tree — ensures full connectivity)
 EDGE_COUNT_MAX    = 19       # maximum undirected edges (≈ density 0.8)
-PATH_COUNTS       = [1, 2, 3, 4, 5, 6]   # controlled trail counts (outcome variable)
+PATH_COUNTS       = [1, 2, 3, 4, 5, 6, 7]   # controlled trail counts (outcome variable)
 TRIALS_PER_BLOCK  = 54       # trials per main block — multiple of 6 (9 reps × 6 path_counts)
 N_MAIN_BLOCKS     = 3        # one block per stim_time; order counterbalanced by PID
 PRACTICE_TRIALS   = 10       # number of practice trials
