@@ -10,7 +10,10 @@ __pycache__/
 *.pyd
 
 # Experiment data output
-data/
+# data/
+data/test/
+data/saved/
+data/simulated/
 
 # IDE
 .vscode/
@@ -19,3 +22,19 @@ data/
 # OS
 .DS_Store
 Thumbs.db
+
+# Rendered report files
+report_files/
+report.html
+
+# Formatter config
+air.toml
+
+# tmp files
+results/
+
+# tmp analysis files
+analysis/
+
+notes.md
+prompt.txt

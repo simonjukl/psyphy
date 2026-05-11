@@ -1,0 +1,368 @@
+---
+title: Odhadování počtu cest v grafech
+subtitle: Psychofyzikální experiment
+author:
+  - Michal Hužva
+  - Šimon Jukl
+date: 2026-05-11
+format: html
+
+execute:
+  echo: false
+  warning: false
+  message: false
+  cache: false
+
+code-fold: show
+
+lang: cs
+---
+
+```{r}
+#| label: setup
+#| code-fold: true
+sessioncheck::sessioncheck()
+library(here)
+library(tidyverse)
+
+library(scales)
+
+library(knitr)
+library(kableExtra)
+
+library(cmdstanr)
+library(brms)
+library(posterior)
+library(tidybayes)
+library(bayesplot)
+library(priorsense)
+
+set.seed(42)
+
+source(here("utils.R"))
+
+update <- TRUE
+if (!file.exists(here("data/clean/data_clean.csv")) & update) {
+  source(here("data/data_prep.R"))
+}
+d0 <- read_csv(here("data/clean/data_clean.csv"))
+
+# source(here("simulation/run_sim.R"))
+sim_results <- read_rds(here("results/sim_results.rds"))
+
+
+theme_custom <-
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid = element_blank(),
+
+    axis.line = element_line(color = "black", linewidth = .5),
+    axis.ticks = element_line(linewidth = .5),
+
+    axis.text = element_text(size = 14, color = "black"),
+    axis.text.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10)),
+  )
+
+
+theme_dist <- list(
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.line.y = element_blank()
+  ),
+  labs(y = NULL)
+)
+
+
+theme_set(theme_custom)
+
+options(brms.backend = "cmdstanr")
+options(mc.cores = 4)
+options(digits = 2)
+options(scipen = 5)
+options(warn = 1)
+
+.ndraws = 40
+n_sim <- 1000
+```
+
+```{r}
+#| label: data-prep
+d <-
+  d0 |>
+  filter_out(when_any(
+    block == "practice",
+    # filter out typos or unreasonable responses
+    response > 20,
+    is.na(response),
+    is.na(rt)
+  )) |>
+  mutate(
+    e = standardize(n_edges),
+    l = standardize(n_loops),
+    p = standardize(n_paths),
+    t = standardize(duration)
+  )
+```
+
+# Úvod
+
+V tomto experimentu měli participanti za úkol odhadovat, kolik unikátních cest viděli ve čtvercovém 4x4 neorientovaném grafu (viz @fig-graph-example).
+
+```{r}
+#| label: fig-graph-example
+#| fig-cap: Příklad grafu
+d |>
+  slice_sample(n = 1) |>
+  as_plot_row() |>
+  plot_row()
+```
+
+Grafy se lišily těmito parametery:
+
+- počet cest (`r range(d$n_paths) |> str_flatten_comma()`)
+- počet hran (`r range(d$n_edges) |> str_flatten_comma()`)
+- počet smyček (`r range(d$n_loops) |> str_flatten_comma()`)
+
+# Vlastnosti grafů a simulace
+
+K prozkoumání vlastností grafů před administrací byly použity simulace.
+
+V jednoduchém grafu, kde jsou všechny uzly spojeny pouze se sousedními uzly nediagonálně, může být maximálně
+
+$$
+(x - 1) \cdot y + x \cdot (y - 1)
+$$
+
+hran, kde $x$ a $y$ jsou počet řádek a sloupců (počet uzlů v každé dimenzi), což se pro čtvercový graf zjednoduší na
+
+$$
+2 \cdot x \cdot (x - 1).
+$$
+
+V našem případě pro graf o velikosti 4 je to tedy $2 \cdot 4 \cdot (4 - 1) = 24$.
+
+Pro graf orientovaný, tedy s jednosměrnými spojy mezi uzly, by tento počet byl dvojnásobný.
+
+Pokud jde o počet smyček, ten je v našem rozsahu plně determinován počtem hran. Minimální počet hran, kterým lze propojit graf, je 15, což implikuje absenci smyček, které vytvářejí nadbytečné spoje. Maximální počet hran, 19, koresponduje ke 4 smyčkám.
+
+## Stanovení rozsahů parametrů
+
+Grafy byly generovány pomocí stanovení minimálního a maximálního počtu hran a cílového počtu cest v grafu.
+
+```{r}
+#| label: fig-edge-dist
+#| fig-cap: Rozložení četnosti počtu hran podle cílového počtu cest
+sim_results |>
+  filter(!is.na(n_paths)) |>
+  ggplot(aes(x = n_edges, fill = factor(target_n_paths))) +
+  geom_histogram(binwidth = 1, position = "stack", alpha = 0.5) +
+  scale_fill_brewer(palette = "Set2", name = "Počet cest") +
+  scale_x_continuous(breaks = scales::breaks_width(1)) +
+  scale_y_continuous(breaks = NULL) +
+  theme_dist
+```
+
+@fig-edge-dist zobrazuje zásadní omezení, tedy že po překročení 19 hran začně minimální možný počet cest zásadně narůstat. Je nám tedy stanovena limitace na počet cest jako 7 a méně. Na základě pilotáže jsme usoudili, že pro krátce prezetované grafy stejně není vyšší počet cest vyhovující.
+
+Na obrázcích níže lze vidět vztah cest s hranami (@fig-edges-paths) a smyčkami (@fig-loops-paths), respektive jejich ekvivalence.
+
+::: {.columns}
+
+::: {.column}
+
+```{r}
+#| label: fig-edges-paths
+#| fig-cap: Počet cest v závislosti na počtu hran
+sim_results |>
+  filter(!is.na(n_paths)) |>
+  ggplot(aes(x = n_edges, y = n_paths, color = factor(n_loops))) +
+  geom_jitter(width = 0.1, height = 0.2, alpha = 0.5, size = 1) +
+  # stat_summary(fun = mean, geom = "line", linewidth = 1, colour = "#4C72B0") +
+  # stat_summary(fun = mean, geom = "point", size = 3, colour = "#4C72B0") +
+  scale_x_continuous(breaks = breaks_width(1)) +
+  scale_y_continuous(breaks = breaks_width(1)) +
+  scale_color_brewer(palette = "Set2", name = "Počet smyček") +
+  labs(
+    x = "Počet hran",
+    y = "Počet cest"
+  ) +
+  guides(color = "none")
+```
+
+:::
+
+::: {.column}
+
+```{r}
+#| label: fig-loops-paths
+#| fig-cap: Počet smyček v závislosti na počtu cest
+sim_results |>
+  filter(!is.na(n_paths)) |>
+  ggplot(aes(x = n_loops, y = n_paths, colour = factor(n_edges))) +
+  geom_jitter(width = 0.1, height = 0.2, alpha = 0.5, size = 1) +
+  scale_x_continuous(breaks = 0:12) +
+  scale_y_continuous(breaks = breaks_width(1)) +
+  scale_color_brewer(palette = "Set2", name = "Počet hran") +
+  labs(
+    x = "Počet smyček",
+    y = "Počet cest"
+  ) +
+  guides(color = "none")
+```
+
+:::
+
+:::
+
+
+# Design
+
+- 10/20 trénovacích trialů
+
+- 1, 3, 5 sekund prezentace stimulu
+
+- 9 x 1 až 7 cest = 63 trialů ()
+
+- 3 bloky x 63 trialů
+
+- po prezentaci 5 s na odpověď
+
+
+# Deskriptivní statistika
+
+## Chybějící hodnoty
+
+```{r}
+#| label: tbl-na
+#| tbl-cap: Počet chybějících odpovědí podle doby trvání stimulu
+d0 |>
+  summarize(n_na = sum(is.na(response)), .by = c(id, duration)) |>
+  arrange(id, duration) |>
+  pivot_wider(id_cols = id, names_from = duration, values_from = n_na) |>
+  kbl(col.names = c("ID", str_c(c(1, 3, 5), " s")), align = "lccc") |>
+  kable_styling(full_width = FALSE)
+```
+
+## Odpovědi
+
+```{r}
+#| label: fig-resp-id
+#| fig-cap: Odpovědi podle reálného počtu cest
+d |>
+  ggplot(aes(response, fill = factor(duration))) +
+  geom_bar(alpha = 0.5) +
+  facet_grid(
+    id ~ duration,
+    scales = "free_y",
+    labeller = labeller(
+      id = \(x) paste("Participant č.", x),
+      duration = \(x) paste("Doba prezentace:", x, "s")
+    )
+  ) +
+  scale_x_continuous(breaks = breaks_width(1), name = "Odpověď (počet cest)") +
+  scale_y_continuous(breaks = breaks_width(5), name = "Celkem zvoleno") +
+  scale_fill_brewer(palette = "Set2", guide = "none") +
+  labs(caption = "Participant č. 1 vyplnil experiment 2krát.")
+```
+
+## Správné odpovědi
+
+```{r}
+#| label: fig-correct-id
+#| fig-cap: Správné odpovědi podle reálného počtu cest
+# d |>
+#   ggplot(aes(response, correct, fill = factor(duration))) +
+#   geom_col(alpha = 0.5) +
+#   facet_wrap(vars(duration)) +
+#   scale_x_continuous(breaks = breaks_width(1), name = "Odpověď (počet cest)") +
+#   scale_fill_brewer(palette = "Set2", name = "Trvání stimulu (s)") +
+#   theme_dist
+
+d |>
+  ggplot(aes(response, correct, fill = factor(duration))) +
+  geom_col(alpha = 0.5) +
+  facet_grid(
+    id ~ duration,
+    scales = "free_y",
+    labeller = labeller(
+      id = \(x) paste("Participant č.", x),
+      duration = \(x) paste("Doba prezentace:", x, "s")
+    )
+  ) +
+  scale_x_continuous(breaks = breaks_width(1), name = "Odpověď (počet cest)") +
+  scale_y_continuous(breaks = breaks_width(3), name = "Celkem správně") +
+  scale_fill_brewer(palette = "Set2", guide = "none") +
+  labs(caption = "Participant č. 1 vyplnil experiment 2krát.")
+```
+
+
+## Reakční čas
+
+
+```{r}
+#| label: fig-rt-id
+#| fig-cal: Reakční čas podle doby trvání stimulu
+d |>
+  ggplot(aes(rt, fill = factor(duration))) +
+  geom_histogram(alpha = 0.5) +
+  facet_grid(
+    id ~ duration,
+    scales = "free_y",
+    labeller = labeller(
+      id = \(x) paste("Participant č.", x),
+      duration = \(x) paste("Doba prezentace:", x, "s")
+    )
+  ) +
+  scale_x_continuous(breaks = breaks_width(1), name = "Odpověď (počet cest)") +
+  scale_fill_brewer(palette = "Set2", guide = "none") +
+  theme_dist +
+  labs(caption = "Participant č. 1 vyplnil experiment 2krát.")
+```
+
+
+## Vztah reakčního času a odpovědí
+
+```{r}
+#| label: fig-rt-resp-id
+#| fig-cal: Reakční čas podle odpovědi a doby trvání stimulu
+d |>
+  ggplot(aes(response, rt, color = factor(duration))) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  # facet_wrap(vars(id)) +
+  facet_grid(
+    id ~ duration,
+    scales = "free_y",
+    labeller = labeller(
+      id = \(x) paste("Participant č.", x),
+      duration = \(x) paste("Doba prezentace:", x, "s")
+    )
+  ) +
+  scale_x_continuous(breaks = breaks_width(1), name = "Odpověď (počet cest)") +
+  scale_color_brewer(palette = "Set2", guide = "none") +
+  labs(y = "Reakční čas")
+```
+
+
+```{r}
+#| label: fig-path-resp-id
+#| fig-cal: Reakční čas podle odpovědi a doby trvání stimulu
+d |>
+  ggplot(aes(n_paths, response, color = factor(duration))) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  # facet_wrap(vars(id)) +
+  facet_grid(
+    id ~ duration,
+    scales = "free_y",
+    labeller = labeller(
+      id = \(x) paste("Participant č.", x),
+      duration = \(x) paste("Doba prezentace:", x, "s")
+    )
+  ) +
+  scale_x_continuous(breaks = breaks_width(1), name = "Počet cest") +
+  scale_y_continuous(breaks = breaks_width(1), name = "Odpověď (počet cest)") +
+  scale_color_brewer(palette = "Set2", guide = "none")
+```

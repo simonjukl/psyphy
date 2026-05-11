@@ -29,6 +29,7 @@ continuous covariate in analysis.
 ## What a "path" means in this experiment
 
 A **trail** is a sequence of nodes where:
+
 - consecutive nodes are connected by an edge,
 - each undirected edge is used **at most once** across the whole trail,
 - **nodes may be revisited** (unlike simple paths).
@@ -59,6 +60,7 @@ of the grid, with the direction (which end is start vs. end) randomised per tria
 ### Practice block (20 trials, 5 s stimulus)
 
 Each trial:
+
 1. **Stimulus** — graph shown for 5 s with the question "How many paths lead from GREEN to RED?"
 2. **Response window** — blank screen, 5 s, participant types a number and presses Enter.
 3. **Text feedback** — correct answer and participant's answer shown for 5 s (SPACE to skip).
@@ -75,18 +77,18 @@ randomly interleaved. No feedback is given. The 54-trial count is a multiple of 
 
 ## Output data
 
-One CSV file per participant, saved to `data/sub-{id}_{timestamp}.csv`. Written
+One CSV file per participant, saved to `data/saved/sub-{id}_{timestamp}.csv`. Written
 incrementally — data is preserved even if the session is interrupted.
 
 | Column | Description |
-|---|---|
+| --- | --- |
 | `pid` | Participant ID entered at startup |
 | `block` | `practice` or `main` |
 | `trial` | Trial number within block |
 | `start` | Start node (row, col) |
 | `end` | End node (row, col) |
 | `edge_count` | Number of undirected edges in this trial's graph |
-| `cyclomatic` | Cyclomatic number: e − v + c |
+| `cyclomatic` | Cyclomatic number: e − v + c (n_loops) |
 | `stim_time` | Stimulus duration in seconds |
 | `edges` | Full directed edge list of the graph |
 | `n_paths` | True number of trails (the controlled value) |
@@ -100,7 +102,7 @@ incrementally — data is preserved even if the session is interrupted.
 ### Requirements
 
 - Python 3.9 – 3.11 (PsychoPy is not yet stable on 3.12+)
-- PsychoPy and its dependencies (see `requirements.txt`)
+- PsychoPy and its dependencies (see `requirements_py.txt`)
 
 ### First-time setup
 
@@ -111,7 +113,7 @@ python -m venv .venv
 # source .venv/bin/activate        # macOS / Linux
 
 # 2. Install dependencies
-pip install -r requirements.txt
+pip install -r requirements_py.txt
 ```
 
 ### Running the experiment
@@ -138,7 +140,7 @@ comfortably on screen. If nodes or arrows are cut off or too small, adjust these
 constants at the top of `exp.py`:
 
 | Constant | Default | Effect |
-|---|---|---|
+| --- | --- | --- |
 | `GRID_SPACING` | 0.28 | Distance between adjacent nodes |
 | `NODE_RADIUS` | 0.040 | Circle radius of each node |
 | `HEAD_HEIGHT` | 0.016 | Arrowhead length |
@@ -152,13 +154,13 @@ All tunable parameters are in the `GLOBAL CONFIGURATION` block at the top of `ex
 (lines 11–55). Most commonly adjusted:
 
 | Parameter | Default | Meaning |
-|---|---|---|
-| `TRIALS_PER_BLOCK` | 54 | Main block trials (keep as multiple of 18) |
+| --- | --- | --- |
+| `TRIALS_PER_BLOCK` | 63 | Main block trials (keep as multiple of 18) |
 | `PRACTICE_TRIALS` | 20 | Practice block trials |
-| `STIM_TIMES` | [3, 5, 7] s | Tachistoscopic durations (balanced) |
+| `STIM_TIMES` | [1, 3, 5] s | Tachistoscopic durations (balanced) |
 | `RESPONSE_WINDOW` | 5.0 s | Time to type answer after stimulus |
 | `FEEDBACK_TEXT_SEC` | 5.0 s | Duration of text feedback per practice trial |
 | `FEEDBACK_PATHS_SEC` | 2.0 s | Duration each trail is shown in practice feedback |
 | `EDGE_COUNT_MIN` | 15 | Minimum edges (15 = spanning tree, cyclomatic = 0) |
 | `EDGE_COUNT_MAX` | 19 | Maximum edges (cyclomatic = 4) |
-| `PATH_COUNTS` | [1…6] | Trail counts to present, balanced across trials |
+| `PATH_COUNTS` | [1…7] | Trail counts to present, balanced across trials |

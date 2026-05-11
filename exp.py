@@ -7,6 +7,16 @@ paths from the GREEN node to the RED node (each undirected edge traversed at mos
 from the green (start) to the red (end) node.
 """
 
+import os
+import csv
+import random
+import argparse
+from datetime import datetime
+from collections import defaultdict
+
+import numpy as np
+from psychopy import visual, core, event, gui
+
 # ============================================================
 # GLOBAL CONFIGURATION — edit freely
 # ============================================================
@@ -22,7 +32,7 @@ STIM_TIMES        = [1, 3, 5]   # one per main block; order determined by Latin 
 RESPONSE_WINDOW   = 5.0      # seconds participant has to type answer
 FEEDBACK_TEXT_SEC  = 5.0      # seconds to show correct-answer text only (practice)
 FEEDBACK_PATHS_SEC = 2.0      # seconds to show each individual trail (practice)
-OUTPUT_DIR        = 'data'   # folder for CSV output
+OUTPUT_DIR        = os.path.join("data", "saved")   # folder for CSV output
 WINDOWED_SIZE     = (1600, 1200)  # window size in pixels when using --windowed
 
 # Valid start↔end pairs — outer-layer non-corner nodes on opposite sides.
@@ -55,16 +65,6 @@ PATH_PALETTE = [
      '#ff006e',  '#fb5607', '#ffbe0b',  '#80ffdb',  '#72efdd',  '#64dfdf', '#56cfe1',  '#48bfe3'
 ]
 # ============================================================
-
-import os
-import csv
-import random
-import argparse
-from datetime import datetime
-from collections import defaultdict
-
-import numpy as np
-from psychopy import visual, core, event, gui
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--windowed', action='store_true', help='Run in a window instead of fullscreen')

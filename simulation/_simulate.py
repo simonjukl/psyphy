@@ -3,7 +3,9 @@ Simulate 5 participants and write data CSVs identical in format to real experime
 Run with: python _simulate.py
 """
 
-import os, csv, random
+import os
+import csv
+import random
 from datetime import datetime, timedelta
 from collections import defaultdict
 
@@ -11,13 +13,13 @@ from collections import defaultdict
 GRID_SIZE        = 4
 EDGE_COUNT_MIN   = 15
 EDGE_COUNT_MAX   = 19
-PATH_COUNTS      = [1, 2, 3, 4, 5, 6]
+PATH_COUNTS      = [1, 2, 3, 4, 5, 6, 7]
 STIM_TIMES       = [1, 3, 5]
-TRIALS_PER_BLOCK = 54
+TRIALS_PER_BLOCK = 63
 PRACTICE_TRIALS  = 10
 PRACTICE_STIM    = 3
 RESPONSE_WINDOW  = 5.0
-OUTPUT_DIR       = 'data'
+OUTPUT_DIR       = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "simulated")
 NODE_PAIRS = [
     ((0, 1), (3, 2)),  # top ↔ bottom, shifted column
     ((0, 2), (3, 1)),  # top ↔ bottom, shifted column
