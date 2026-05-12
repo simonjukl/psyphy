@@ -2,17 +2,18 @@
 title: Odhadování počtu cest v grafech
 subtitle: Psychofyzikální experiment
 author:
-  - Michal Hužva
   - Šimon Jukl
+  - Michal Hužva
 date: 2026-05-11
 format:
   html:
     out-width: 90%
-    fig-width: 8
-    fig-asp: 0.7
+    fig-width: 6
+    fig-asp: 0.8
     fig-align: center
     fig-cap-location: top
     embed-resources: true
+    html-math-method: katex
 
 execute:
   echo: true
@@ -120,7 +121,7 @@ p_labels <- sort(unique(d$n_paths))
 t_labels <- sort(unique(d$duration))
 l_labels <- sort(unique(d$n_loops))
 
-lab_id <- as_labeller(\(x) paste("Participant č.", x))
+lab_id <- as_labeller(\(x) paste("ID: ", x))
 lab_t <- as_labeller(\(x) {
   orig <- as.numeric(x) * attr(d$t, "scaled:scale") + attr(d$t, "scaled:center")
   paste("Doba prezentace:", round(orig, 1), "s")
@@ -444,7 +445,7 @@ d |>
 
 ## Model 1: Cesty a doba trvání
 
-$$
+
 \begin{aligned}
 
 y_i &\sim \text{Poisson}(\lambda_i) \\
@@ -460,7 +461,7 @@ y_i &\sim \text{Poisson}(\lambda_i) \\
 \beta_{t} &\sim \operatorname{Normal}(0, 0.1)
 
 \end{aligned}
-$$
+
 
 ```{r}
 #| label: fit1
@@ -497,7 +498,7 @@ pp_check(fit1, type = "bars", ndraws = 200) +
 
 Všechny následující modely používají zero-truncated Poissonovu regresi, která omezuje možné odpovědi dolní hranicí na jedna a více, tedy nedovoluje nulu.
 
-$$
+
 \begin{aligned}
 
 y_i &\sim \text{ZTPoisson}(\lambda_i) \\
@@ -513,7 +514,7 @@ y_i &\sim \text{ZTPoisson}(\lambda_i) \\
 \beta_{t} &\sim \operatorname{Normal}(0, 0.1)
 
 \end{aligned}
-$$
+
 
 ```{r}
 #| label: fit2
@@ -542,6 +543,30 @@ pp_check(fit2, type = "bars", ndraws = 200) +
 
 
 ## Model 3: Varying effects
+
+\begin{aligned}
+
+y_i &\sim \text{ZTPoisson}(\lambda_i) \\
+
+\log \lambda_i &= \beta_0 + u_{0,\text{id}[i]} +
+                  (\beta_{p} + u_{p,\text{id}[i]}) (p_i - \overline{p}) +
+                  (\beta_{t} + u_{t,\text{id}[i]}) (t_i - \overline{t}) \\
+
+\beta_0 &\sim \operatorname{Normal}(\log \overline{p}, 0.2) \\
+
+\beta_{p} &\sim \operatorname{Normal}(0.1, 0.2) \\
+
+\beta_{t} &\sim \operatorname{Normal}(0, 0.1) \\
+
+\begin{pmatrix} u_{0,j} \\ u_{p,j} \\ u_{t,j} \end{pmatrix} &\sim \operatorname{MVNormal}(\mathbf{0},\, \mathbf{S}) \\
+
+\mathbf{S} &= \operatorname{diag}(\sigma) \, \mathbf{R} \, \operatorname{diag}(\sigma) \\
+
+\sigma &\sim \operatorname{Student-t}(3, 0, 0.2) \\
+
+\mathbf{R} &\sim \operatorname{LKJ}(2)
+
+\end{aligned}
 
 ```{r}
 #| label: fit3
@@ -594,7 +619,7 @@ Tento model byl pokus o řešení nadhodnoceného rozptylu u Poissonovy regrese,
 
 Do modelu byly přidány reziduály počtu smyček po OLS regresi na počet cest. Tento výpočet reziduálů je pouze aproximace, jelikož nezohledňuje celou nejistotu posteriorní distribuce reziduálů, ale pouze jejich OLS odhad. Je tedy možné nadhodnocení prediktičních schopností modelu.
 
-$$
+
 \begin{aligned}
 
 y_i &\sim \text{ZTP}(\lambda_i) \\
@@ -615,7 +640,7 @@ y_i &\sim \text{ZTP}(\lambda_i) \\
 \sigma_{\text{id}} &\sim \operatorname{Student-t}(3, 0, 0.1)
 
 \end{aligned}
-$$
+
 
 ### Implikace priorů
 
@@ -994,9 +1019,9 @@ post_draws5 |>
   labs(color = NULL)
 ```
 
-Jak lze vidět na @fig-prior-post5-epred a @fig-post5-epred, model vnímá jednoznačně rostoucí trend v počtu cest
+Jak lze vidět na @fig-prior-post5-epred a @fig-post5-epred, model vnímá jednoznačně rostoucí trend v počtu cest.
 
-se zvyšujícím se časem se dle modelu zvyšuje i rozptyl, což jde proti naší původní hypotéze o vyšší přesnosti při delším časovém úseku.
+Se zvyšujícím se časem se dle modelu zvyšuje i rozptyl, což jde proti naší původní hypotéze o vyšší přesnosti při delším časovém úseku.
 
 Naši druhou hypotézu, vyšší počet smyšek vede
 
