@@ -24,8 +24,8 @@ data/simulated/
 Thumbs.db
 
 # Rendered report files
-report_files/
-report.html
+# report_files/
+# report.html
 
 # Formatter config
 air.toml
@@ -38,3 +38,6 @@ analysis/
 
 notes.md
 prompt.txt
+
+/.quarto/
+**/*.quarto_ipynb

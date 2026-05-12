@@ -5,15 +5,22 @@ author:
   - Michal Hužva
   - Šimon Jukl
 date: 2026-05-11
-format: html
+format:
+  html:
+    out-width: 90%
+    fig-width: 8
+    fig-asp: 0.7
+    fig-align: center
+    fig-cap-location: top
+    embed-resources: true
 
 execute:
-  echo: false
+  echo: true
   warning: false
   message: false
   cache: false
 
-code-fold: show
+code-fold: true
 
 lang: cs
 ---
@@ -41,15 +48,14 @@ set.seed(42)
 
 source(here("utils.R"))
 
-update <- TRUE
-if (!file.exists(here("data/clean/data_clean.csv")) & update) {
+update <- FALSE
+if (!file.exists(here("data/clean/data_clean.csv")) | update) {
   source(here("data/data_prep.R"))
 }
 d0 <- read_csv(here("data/clean/data_clean.csv"))
 
 # source(here("simulation/run_sim.R"))
 sim_results <- read_rds(here("results/sim_results.rds"))
-
 
 theme_custom <-
   theme_minimal(base_size = 12) +
@@ -59,11 +65,10 @@ theme_custom <-
     axis.line = element_line(color = "black", linewidth = .5),
     axis.ticks = element_line(linewidth = .5),
 
-    axis.text = element_text(size = 14, color = "black"),
+    axis.text = element_text(size = 8, color = "black"),
     axis.text.x = element_text(margin = margin(t = 10)),
     axis.title.y = element_text(margin = margin(r = 10)),
   )
-
 
 theme_dist <- list(
   theme(
@@ -74,12 +79,11 @@ theme_dist <- list(
   labs(y = NULL)
 )
 
-
 theme_set(theme_custom)
 
 options(brms.backend = "cmdstanr")
 options(mc.cores = 4)
-options(digits = 2)
+options(digits = 3)
 options(scipen = 5)
 options(warn = 1)
 
@@ -106,6 +110,31 @@ d <-
   )
 ```
 
+```{r}
+#| label: plot-helpers
+p_vals <- sort(unique(d$p))
+t_vals <- sort(unique(d$t))
+l_vals <- sort(unique(d$l))
+
+p_labels <- sort(unique(d$n_paths))
+t_labels <- sort(unique(d$duration))
+l_labels <- sort(unique(d$n_loops))
+
+lab_id <- as_labeller(\(x) paste("Participant č.", x))
+lab_t <- as_labeller(\(x) {
+  orig <- as.numeric(x) * attr(d$t, "scaled:scale") + attr(d$t, "scaled:center")
+  paste("Doba prezentace:", round(orig, 1), "s")
+})
+lab_p <- as_labeller(\(x) {
+  orig <- as.numeric(x) * attr(d$p, "scaled:scale") + attr(d$p, "scaled:center")
+  paste("Počet cest:", round(orig, 1))
+})
+lab_l <- as_labeller(\(x) {
+  orig <- as.numeric(x) * attr(d$l, "scaled:scale") + attr(d$l, "scaled:center")
+  paste("Počet smyček:", round(orig, 1))
+})
+```
+
 # Úvod
 
 V tomto experimentu měli participanti za úkol odhadovat, kolik unikátních cest viděli ve čtvercovém 4x4 neorientovaném grafu (viz @fig-graph-example).
@@ -113,6 +142,8 @@ V tomto experimentu měli participanti za úkol odhadovat, kolik unikátních ce
 ```{r}
 #| label: fig-graph-example
 #| fig-cap: Příklad grafu
+#| fig-width: 4
+#| fig-asp: 0.9
 d |>
   slice_sample(n = 1) |>
   as_plot_row() |>
@@ -179,8 +210,6 @@ sim_results |>
   filter(!is.na(n_paths)) |>
   ggplot(aes(x = n_edges, y = n_paths, color = factor(n_loops))) +
   geom_jitter(width = 0.1, height = 0.2, alpha = 0.5, size = 1) +
-  # stat_summary(fun = mean, geom = "line", linewidth = 1, colour = "#4C72B0") +
-  # stat_summary(fun = mean, geom = "point", size = 3, colour = "#4C72B0") +
   scale_x_continuous(breaks = breaks_width(1)) +
   scale_y_continuous(breaks = breaks_width(1)) +
   scale_color_brewer(palette = "Set2", name = "Počet smyček") +
@@ -216,7 +245,6 @@ sim_results |>
 
 :::
 
-
 # Design
 
 - 10/20 trénovacích trialů
@@ -228,7 +256,6 @@ sim_results |>
 - 3 bloky x 63 trialů
 
 - po prezentaci 5 s na odpověď
-
 
 # Deskriptivní statistika
 
@@ -245,6 +272,28 @@ d0 |>
   kable_styling(full_width = FALSE)
 ```
 
+## Rychlost odpovědi
+
+```{r}
+#| label: fig-rt-id
+#| fig-cal: Rychlost odpovědi podle doby trvání stimulu
+d |>
+  ggplot(aes(rt, fill = factor(duration))) +
+  geom_histogram(alpha = 0.5) +
+  facet_grid(
+    id ~ t,
+    scales = "free_y",
+    labeller = labeller(
+      id = lab_id,
+      t = lab_t
+    )
+  ) +
+  scale_x_continuous(breaks = breaks_width(1), name = "Rychlost odpovědi (s)") +
+  scale_fill_brewer(palette = "Set2", guide = "none") +
+  theme_dist +
+  labs(caption = "Participant č. 1 vyplnil experiment 2krát.")
+```
+
 ## Odpovědi
 
 ```{r}
@@ -254,11 +303,11 @@ d |>
   ggplot(aes(response, fill = factor(duration))) +
   geom_bar(alpha = 0.5) +
   facet_grid(
-    id ~ duration,
+    id ~ t,
     scales = "free_y",
     labeller = labeller(
-      id = \(x) paste("Participant č.", x),
-      duration = \(x) paste("Doba prezentace:", x, "s")
+      id = lab_id,
+      t = lab_t
     )
   ) +
   scale_x_continuous(breaks = breaks_width(1), name = "Odpověď (počet cest)") +
@@ -266,8 +315,6 @@ d |>
   scale_fill_brewer(palette = "Set2", guide = "none") +
   labs(caption = "Participant č. 1 vyplnil experiment 2krát.")
 ```
-
-## Správné odpovědi
 
 ```{r}
 #| label: fig-correct-id
@@ -284,11 +331,11 @@ d |>
   ggplot(aes(response, correct, fill = factor(duration))) +
   geom_col(alpha = 0.5) +
   facet_grid(
-    id ~ duration,
+    id ~ t,
     scales = "free_y",
     labeller = labeller(
-      id = \(x) paste("Participant č.", x),
-      duration = \(x) paste("Doba prezentace:", x, "s")
+      id = lab_id,
+      t = lab_t
     )
   ) +
   scale_x_continuous(breaks = breaks_width(1), name = "Odpověď (počet cest)") +
@@ -297,72 +344,692 @@ d |>
   labs(caption = "Participant č. 1 vyplnil experiment 2krát.")
 ```
 
-
-## Reakční čas
-
-
-```{r}
-#| label: fig-rt-id
-#| fig-cal: Reakční čas podle doby trvání stimulu
-d |>
-  ggplot(aes(rt, fill = factor(duration))) +
-  geom_histogram(alpha = 0.5) +
-  facet_grid(
-    id ~ duration,
-    scales = "free_y",
-    labeller = labeller(
-      id = \(x) paste("Participant č.", x),
-      duration = \(x) paste("Doba prezentace:", x, "s")
-    )
-  ) +
-  scale_x_continuous(breaks = breaks_width(1), name = "Odpověď (počet cest)") +
-  scale_fill_brewer(palette = "Set2", guide = "none") +
-  theme_dist +
-  labs(caption = "Participant č. 1 vyplnil experiment 2krát.")
-```
-
-
-## Vztah reakčního času a odpovědí
-
 ```{r}
 #| label: fig-rt-resp-id
 #| fig-cal: Reakční čas podle odpovědi a doby trvání stimulu
 d |>
   ggplot(aes(response, rt, color = factor(duration))) +
-  geom_point() +
+  geom_jitter(width = 0.1, height = 0) +
   geom_smooth(method = "lm") +
   # facet_wrap(vars(id)) +
   facet_grid(
-    id ~ duration,
+    id ~ t,
     scales = "free_y",
     labeller = labeller(
-      id = \(x) paste("Participant č.", x),
-      duration = \(x) paste("Doba prezentace:", x, "s")
+      id = lab_id,
+      t = lab_t
     )
   ) +
   scale_x_continuous(breaks = breaks_width(1), name = "Odpověď (počet cest)") +
-  scale_color_brewer(palette = "Set2", guide = "none") +
-  labs(y = "Reakční čas")
+  scale_y_continuous(breaks = breaks_width(1), name = "Reakční čas") +
+  scale_color_brewer(palette = "Set2", guide = "none")
 ```
-
 
 ```{r}
 #| label: fig-path-resp-id
-#| fig-cal: Reakční čas podle odpovědi a doby trvání stimulu
+#| fig-cap: Vztah odpovědí, počtu cest a doby trvání stimulu
 d |>
   ggplot(aes(n_paths, response, color = factor(duration))) +
-  geom_point() +
-  geom_smooth(method = "lm") +
+  geom_jitter(width = 0.1, height = 0.1, alpha = 0.7) +
+  geom_smooth(
+    aes(linetype = "lm log(x)"),
+    method = "lm",
+    formula = y ~ log(x),
+    se = FALSE
+  ) +
+  geom_smooth(
+    aes(linetype = "lm x"),
+    method = "lm",
+    formula = y ~ x,
+    se = FALSE
+  ) +
+  geom_smooth(
+    aes(linetype = "loess"),
+    method = "loess",
+    formula = y ~ x,
+    se = FALSE
+  ) +
+  geom_abline(linetype = 2, alpha = 0.3) +
   # facet_wrap(vars(id)) +
   facet_grid(
-    id ~ duration,
-    scales = "free_y",
+    id ~ t,
+    # scales = "free_y",
     labeller = labeller(
-      id = \(x) paste("Participant č.", x),
-      duration = \(x) paste("Doba prezentace:", x, "s")
+      id = lab_id,
+      t = lab_t
     )
   ) +
   scale_x_continuous(breaks = breaks_width(1), name = "Počet cest") +
   scale_y_continuous(breaks = breaks_width(1), name = "Odpověď (počet cest)") +
+  scale_color_brewer(palette = "Set2", guide = "none") +
+  scale_linetype_manual(
+    name = "Trend",
+    values = c("lm log(x)" = "solid", "lm x" = "dashed", "loess" = "dotdash"),
+  ) +
+  guides(linetype = guide_legend(override.aes = list(color = "black")))
+```
+
+```{r}
+#| label: fig-loop-resp-id
+#| fig-cap: Vztah odpovědí, počtu smyček a doby trvání stimulu
+d |>
+  ggplot(aes(n_loops + 1, response, color = factor(duration))) +
+  geom_jitter(width = 0.1, height = 0.1) +
+  geom_smooth(method = "lm", formula = y ~ log(x)) +
+  # geom_abline(linetype = 2, alpha = 0.5) +
+  # facet_wrap(vars(id)) +
+  facet_grid(
+    id ~ t,
+    # scales = "free_y",
+    labeller = labeller(
+      id = lab_id,
+      t = lab_t
+    )
+  ) +
+  scale_x_continuous(breaks = breaks_width(1), name = "Počet smyček") +
+  scale_y_continuous(breaks = breaks_width(1), name = "Odpověď (počet cest)") +
   scale_color_brewer(palette = "Set2", guide = "none")
 ```
+
+# Modely
+
+- Poissonova (log-lineární) regrese
+
+- všechny prediktory jsou vycentrované
+
+- $y$ je odpověď participanta
+- $p$ je počet cest
+- $t$ je doba prezentace stimulu
+- $l$ je počet smyček
+
+## Model 1: Cesty a doba trvání
+
+$$
+\begin{aligned}
+
+y_i &\sim \text{Poisson}(\lambda_i) \\
+
+\log \lambda_i &= \beta_0 +
+                  \beta_{p} (p_i - \overline{p}) +
+                  \beta_{t} (t_i - \overline{t}) \\
+
+\beta_0 &\sim \operatorname{Normal}(\log \overline{p}, 0.2) \\
+
+\beta_{p} &\sim \operatorname{Normal}(0.1, 0.2) \\
+
+\beta_{t} &\sim \operatorname{Normal}(0, 0.1)
+
+\end{aligned}
+$$
+
+```{r}
+#| label: fit1
+#| code-fold: show
+prior1 <- c(
+  set_prior(str_glue("normal(1.3, 0.2)"), class = "b", coef = "Intercept"),
+  set_prior("normal(0.1, 0.2)", class = "b", coef = "p"),
+  set_prior("normal(0, 0.1)", class = "b", coef = "t")
+)
+
+fit1 <- brm(
+  formula = bf(response ~ 0 + Intercept + p + t),
+  data = d,
+  family = poisson(),
+  prior = prior1,
+  seed = 42,
+  file = here("results/fits/fit1.rds")
+)
+
+fit1
+```
+
+Model dovoluje nulu, což neodpovídá našim podmínkám.
+
+```{r}
+#| label: fig-post1-pred
+#| fig-cap: A posteriori predikce (tmavě) vs. reálná data (světlé sloupce)
+pp_check(fit1, type = "bars", ndraws = 200) +
+  scale_x_continuous(breaks = breaks_width(1), name = "Počet cest") +
+  theme_dist
+```
+
+## Model 2: Zero-truncated Poisson
+
+Všechny následující modely používají zero-truncated Poissonovu regresi, která omezuje možné odpovědi dolní hranicí na jedna a více, tedy nedovoluje nulu.
+
+$$
+\begin{aligned}
+
+y_i &\sim \text{ZTPoisson}(\lambda_i) \\
+
+\log \lambda_i &= \beta_0 +
+                  \beta_{p} (p_i - \overline{p}) +
+                  \beta_{t} (t_i - \overline{t}) \\
+
+\beta_0 &\sim \operatorname{Normal}(\log \overline{p}, 0.2) \\
+
+\beta_{p} &\sim \operatorname{Normal}(0.1, 0.2) \\
+
+\beta_{t} &\sim \operatorname{Normal}(0, 0.1)
+
+\end{aligned}
+$$
+
+```{r}
+#| label: fit2
+#| code-fold: show
+fit2 <- brm(
+  formula = bf(response | trunc(lb = 1) ~ 0 + Intercept + p + t),
+  data = d,
+  family = poisson(),
+  prior = prior1,
+  seed = 42,
+  file = here("results/fits/fit2.rds")
+)
+
+fit2
+```
+
+Tento model pasuje o něco lépe, bohužel stále vidíme odchylky kvůli parametrizaci Poissonovy regrese, ve které je parametr $\lambda$ jak očekávanou hodnotou, tak mírou rozptylu. Zde pak dochází k tomu, že aby model vyhověl rozptylu dat, snižuje lambdu, čímž však dostává očekávanou hodnotu pod reálný peak dat.
+
+```{r}
+#| label: fig-post2-pred
+#| fig-cap: A posteriori predikce (tmavě) vs. reálná data (světlé sloupce)
+pp_check(fit2, type = "bars", ndraws = 200) +
+  scale_x_continuous(breaks = breaks_width(1), name = "Počet cest") +
+  theme_dist
+```
+
+
+## Model 3: Varying effects
+
+```{r}
+#| label: fit3
+#| code-fold: show
+prior3 <- c(
+  prior1,
+  set_prior("lkj(2)", class = "cor", group = "id"),
+  set_prior(
+    "student_t(3, 0, 0.2)",
+    class = "sd",
+    coef = "Intercept",
+    group = "id"
+  ),
+  set_prior("student_t(3, 0, 0.2)", class = "sd", coef = "p", group = "id"),
+  set_prior("student_t(3, 0, 0.2)", class = "sd", coef = "t", group = "id")
+)
+
+fit3 <- brm(
+  formula = bf(
+    response | trunc(lb = 1) ~ 0 + Intercept + p + t + (1 + p + t | id)
+  ),
+  data = d,
+  family = poisson(),
+  prior = prior3,
+  seed = 42,
+  file = here("results/fits/fit3.rds"),
+  control = list(adapt_delta = 0.95)
+)
+
+fit3
+```
+
+Hierarchický model problémy s nadhodnocováním variance neřeší, je však dalším logickým krokem při tvorbě modelu.
+
+```{r}
+#| label: fig-post3-pred
+#| fig-cap: A posteriori predikce (tmavě) vs. reálná data (světlé sloupce)
+pp_check(fit3, type = "bars", ndraws = 200) +
+  scale_x_continuous(breaks = breaks_width(1), name = "Počet cest") +
+  theme_dist
+```
+
+## Model 4: Conway-Maxwell Poisson (COMP)
+
+Tento model byl pokus o řešení nadhodnoceného rozptylu u Poissonovy regrese, avšak se nepodařilo ho dobře parametrizovat a byl tedy vyřazen.
+
+
+
+## Model 5: Reziduály smyček
+
+Do modelu byly přidány reziduály počtu smyček po OLS regresi na počet cest. Tento výpočet reziduálů je pouze aproximace, jelikož nezohledňuje celou nejistotu posteriorní distribuce reziduálů, ale pouze jejich OLS odhad. Je tedy možné nadhodnocení prediktičních schopností modelu.
+
+$$
+\begin{aligned}
+
+y_i &\sim \text{ZTP}(\lambda_i) \\
+
+\log \lambda_i &= \beta_0 +
+                  \beta_{p} (p_i - \overline{p}) +
+                  \beta_{t} (t_i - \overline{t}) +
+                  \beta_{lr} \cdot lr_i \\
+
+\beta_0 &\sim \operatorname{Normal}(\log \overline{p}, 0.2) \\
+
+\beta_{p} &\sim \operatorname{Normal}(0.1, 0.2) \\
+
+\beta_{t} &\sim \operatorname{Normal}(0, 0.1) \\
+
+\beta_{lr} &\sim \operatorname{Normal}(0.01, 0.05) \\
+
+\sigma_{\text{id}} &\sim \operatorname{Student-t}(3, 0, 0.1)
+
+\end{aligned}
+$$
+
+### Implikace priorů
+
+Prior pro $\beta_0$ (průsečík lineárního prediktoru) je vycentrovaný na logaritmu zaokrouhleného průměru počtu cest v datech. Tento prior je agnostický vůči směru efektu a naznačuje linární vztah.
+
+Prior pro $\beta_p$ je mírně pozitivní, jelikož očekáváme vyšší odhad počtu cest se zvyšujícím se reálným počtem cest.
+
+Prior pro $\beta_lr$ je vycentrovaný na nule. Je totiž možné, že se zvyšujícím se časem lidé spočítájí více cest, ale také že kvůli delší rozvaze nenechají zmást vyšší hustotou a počtem smyček.
+
+Prior $\beta_{lr}$ je vycentrovaný na nule. Dopředu neočekáváme směr efektu reziduálů smyček po kontrole počtu cest. Priorní distribuce pro hyperparametry ($\sigma_{\text{id}}$) nechávají místo pro individuální rozdíly i v extrémech.
+
+Reziduály smyček lze intepretovat jako (standardizovaný) počet smyček vyšší (nebo menší), než by v grafu predikoval počet cest. Interpretace jejich koeficientů je tedy efekt "nadbytečných" smyček na odhadovaný počet cest.
+
+```{r}
+#| label: rztpois
+# random draws from zero-truncated poisson (resample when 0)
+rztpois <- function(n, lambda) {
+  x <- rpois(n, lambda)
+  while (any(x == 0)) {
+    x[x == 0] <- rpois(sum(x == 0), lambda[x == 0])
+  }
+  x
+}
+```
+
+```{r}
+#| label: prior-draws5
+d <- d |>
+  mutate(
+    lr = residuals(lm(l ~ p, data = d))
+  )
+
+lr_vals <- quantile(unique(d$lr), probs = c(0.1, 0.5, 0.9))
+
+lab_lr <- as_labeller(\(x) {
+  # orig <- as.numeric(x) * attr(d$lr, "scaled:scale") + attr(d$lr, "scaled:center")
+  paste("Rezid. smyček:", round(lr_vals * sd(d$n_loops), 1))
+})
+
+
+prior_draws5 <-
+  tibble(
+    .draw = 1:n_sim,
+    b_Intercept = rnorm(n_sim, 1.3, 0.2),
+    b_p = rnorm(n_sim, 0.1, 0.2),
+    b_t = rnorm(n_sim, 0.0, 0.1),
+    b_lr = rnorm(n_sim, 0.01, 0.1),
+    sd_id__Intercept = abs(rt(n_sim, df = 3) * 0.1),
+    sd_id__p = abs(rt(n_sim, df = 3) * 0.1),
+    sd_id__t = abs(rt(n_sim, df = 3) * 0.1),
+    sd_id__lr = abs(rt(n_sim, df = 3) * 0.1)
+  ) |>
+  as_draws_df() |>
+  expand_grid(id = sort(unique(d$id)), p = p_vals, t = t_vals, lr = lr_vals) |>
+  mutate(
+    u_Intercept = rnorm(n(), 0, sd_id__Intercept),
+    u_p = rnorm(n(), 0, sd_id__p),
+    u_t = rnorm(n(), 0, sd_id__t),
+    u_lr = rnorm(n(), 0, sd_id__lr),
+    linpred = b_Intercept +
+      u_Intercept +
+      (b_p + u_p) * p +
+      (b_t + u_t) * t +
+      (b_lr + u_lr) * lr,
+    epred = exp(linpred),
+    predicted = rztpois(n(), epred)
+  )
+```
+
+```{r}
+#| label: fig-prior5-expected
+#| fig-cap: Očekávaný odhad a priori (Model 5)
+prior_draws5 |>
+  sample_draws(ndraws = .ndraws / 4) |>
+  ggplot(aes(p, epred, group = interaction(.draw, id))) +
+  geom_line(alpha = 0.2) +
+  facet_grid(t ~ lr, labeller = labeller(t = lab_t, lr = lab_lr)) +
+  scale_x_continuous(breaks = p_vals, labels = p_labels, name = "Počet cest") +
+  scale_y_continuous(
+    breaks = breaks_width(1),
+    name = "Očekávaný průměr odhadů"
+  ) +
+  coord_cartesian(ylim = c(0, 10))
+```
+
+::: {.columns}
+
+::: {.column width="40%"}
+
+```{r}
+#| label: tbl-prior5-epred-p
+#| tbl-cap: Očekávaný odhad a priori podle počtu cest
+prior_draws5 |>
+  group_by(p) |>
+  median_qi(epred) |>
+  bind_cols(p2 = p_labels) |>
+  select(p2, 2:4) |>
+  kbl(col.names = c("Počet cest", "Medián", "Q2.5", "Q97.5"), align = "lccc") |>
+  kable_styling(full_width = FALSE)
+```
+
+:::
+
+::: {.column width="40%"}
+
+```{r}
+#| label: tbl-prior5-epred-t
+#| tbl-cap: Očekávaný odhad a priori podle doby prezentace
+prior_draws5 |>
+  group_by(t) |>
+  median_qi(epred) |>
+  bind_cols(t2 = str_c(t_labels, " s")) |>
+  select(t2, 2:4) |>
+  kbl(col.names = c("Čas", "Medián", "Q2.5", "Q97.5"), align = "lccc") |>
+  kable_styling(full_width = FALSE)
+```
+
+:::
+
+:::
+
+```{r}
+#| label: fig-prior5-pred
+#| fig-cap: A priori predikce odpovědí (Model 5)
+prior_draws5 |>
+  ggplot(aes(predicted)) +
+  geom_bar(alpha = 0.5) +
+  scale_x_continuous(
+    breaks = breaks_width(1),
+    name = "Očekávaný odhad počtu cest"
+  ) +
+  coord_cartesian(xlim = c(1, 13)) +
+  labs(y = NULL) +
+  theme_dist
+```
+
+### Fit
+
+```{r}
+#| label: fit5
+#| code-fold: show
+prior5 <- c(
+  prior1,
+  set_prior("normal(0.01, 0.1)", class = "b", coef = "lr"),
+  # fmt: skip
+  set_prior("student_t(3, 0, 0.1)", class = "sd", coef = "Intercept", group = "id"),
+  set_prior("student_t(3, 0, 0.1)", class = "sd", coef = "p", group = "id"),
+  set_prior("student_t(3, 0, 0.1)", class = "sd", coef = "t", group = "id"),
+  set_prior("student_t(3, 0, 0.1)", class = "sd", coef = "lr", group = "id")
+)
+
+fit5 <- brm(
+  formula = bf(
+    # fmt: skip
+    response | trunc(lb = 1) ~ 0 + Intercept + p + t + lr + (1 + p + t + lr || id)
+  ),
+  data = d,
+  family = poisson(),
+  prior = prior5,
+  iter = 4000,
+  warmup = 2000,
+  seed = 42,
+  file = here("results/fits/fit5.rds"),
+  control = list(adapt_delta = 0.99)
+)
+```
+
+```{r}
+#| label: tbl-fit5-info
+#| tbl-cap: Parametry pátého modelu
+fit5 |>
+  as_draws_df() |>
+  subset_draws(variable = "^b_|^sd_", regex = TRUE) |>
+  summarize_draws() |>
+  select(!c(3, 5)) |>
+  kbl(
+    col.names = c(
+      "Parametr",
+      "Průměr",
+      "SD",
+      "Q2.5",
+      "Q97.5",
+      "Rhat",
+      "ESS_bulk",
+      "ESS_tail"
+    ),
+    digits = 2,
+    align = "lccccccc"
+  ) |>
+  kable_styling(full_width = FALSE)
+```
+
+```{r}
+#| label: fig-prior-post5
+#| fig-cap: Prior vs. posterior (Model 5)
+draws5 <- as_draws_df(fit5)
+
+params5 <-
+  draws5 |>
+  gather_rvars(
+    b_Intercept,
+    b_p,
+    b_t,
+    b_lr,
+    sd_id__Intercept,
+    sd_id__p,
+    sd_id__t,
+    sd_id__lr
+  ) |>
+  mutate(
+    threshold = case_when(
+      .variable == "b_Intercept" ~ 1,
+      str_detect(.variable, "^sd_") ~ 0.05,
+      .default = 0
+    )
+  ) |>
+  mutate(p_pos = mean(.value > threshold)) |>
+  mutate(
+    label = str_glue(
+      "P(b > {threshold}) = {round(p_pos, 2)*100} %"
+    )
+  )
+
+bind_rows(
+  Prior = prior_draws5 |>
+    distinct(.draw, .keep_all = TRUE) |>
+    select(
+      b_Intercept,
+      b_p,
+      b_t,
+      b_lr,
+      sd_id__Intercept,
+      sd_id__p,
+      sd_id__t,
+      sd_id__lr
+    ) |>
+    as_draws_df() |>
+    gather_draws(
+      b_Intercept,
+      b_p,
+      b_t,
+      b_lr,
+      sd_id__Intercept,
+      sd_id__p,
+      sd_id__t,
+      sd_id__lr
+    ),
+  Posterior = draws5 |>
+    gather_draws(
+      b_Intercept,
+      b_p,
+      b_t,
+      b_lr,
+      sd_id__Intercept,
+      sd_id__p,
+      sd_id__t,
+      sd_id__lr
+    ),
+  .id = "source"
+) |>
+  ggplot(aes(x = .value, fill = source)) +
+  stat_slab(alpha = 0.5) +
+  geom_text(
+    data = params5,
+    aes(label = label),
+    x = -Inf,
+    y = Inf,
+    hjust = -0.1,
+    vjust = 1.3,
+    inherit.aes = FALSE,
+    size = 3
+  ) +
+  scale_fill_manual(values = c(Prior = "grey70", Posterior = "steelblue")) +
+  facet_wrap(vars(.variable), nrow = 2, scales = "free_x") +
+  labs(x = NULL, y = NULL, fill = NULL) +
+  theme_dist
+```
+
+```{r}
+#| label: fig-priorsense5-b
+#| fig-cap: Analýza citlivosti prioru – hlavní parametry (Model 5)
+powerscale_plot_dens(
+  fit5,
+  variable = c(
+    "b_Intercept",
+    "b_p",
+    "b_t",
+    "b_lr"
+  ),
+  help_text = FALSE
+)
+```
+
+```{r}
+#| label: fig-priorsense5-sd
+#| fig-cap: Analýza citlivosti prioru – individuální parametry (Model 5)
+powerscale_plot_dens(
+  fit5,
+  variable = c(
+    "sd_id__Intercept",
+    "sd_id__p",
+    "sd_id__t",
+    "sd_id__lr"
+  ),
+  help_text = FALSE
+)
+```
+
+```{r}
+#| label: tbl-priorsense5
+#| tbl-cap: Analýza citlivosti prioru (Model 5)
+powerscale5 <- powerscale_sensitivity(
+  fit5,
+  variable = c(
+    "b_Intercept",
+    "b_p",
+    "b_t",
+    "b_lr",
+    "sd_id__Intercept",
+    "sd_id__p",
+    "sd_id__t",
+    "sd_id__lr"
+  )
+)
+
+powerscale5 |>
+  kbl() |>
+  kable_styling(full_width = FALSE)
+```
+
+```{r}
+#| label: fig-prior-post5-epred
+#| fig-cap: A priori (šedě) vs. a posteriori predikce (modře) počtu cest
+post_draws5 <-
+  draws5 |>
+  expand_grid(p = p_vals, t = t_vals, lr = lr_vals) |>
+  mutate(
+    linpred = b_Intercept + b_p * p + b_t * t + b_lr * lr,
+    epred = exp(linpred)
+  )
+
+prior_draws5_fe <-
+  prior_draws5 |>
+  distinct(.draw, b_Intercept, b_p, b_t, b_lr) |>
+  expand_grid(p = p_vals, t = t_vals, lr = lr_vals) |>
+  mutate(
+    linpred = b_Intercept + b_p * p + b_t * t + b_lr * lr,
+    epred = exp(linpred)
+  )
+
+bind_rows(
+  Prior = prior_draws5_fe |> sample_draws(ndraws = .ndraws),
+  Posterior = post_draws5 |> sample_draws(ndraws = .ndraws),
+  .id = "source"
+) |>
+  ggplot(aes(p, epred, group = interaction(.draw, source), color = source)) +
+  geom_line(alpha = 0.2) +
+  facet_grid(lr ~ t, labeller = labeller(t = lab_t, lr = lab_lr)) +
+  scale_x_continuous(breaks = p_vals, labels = p_labels, name = "Počet cest") +
+  scale_y_continuous(breaks = breaks_width(1), name = "Očekávaný průměr") +
+  scale_color_manual(values = c(Prior = "grey50", Posterior = "steelblue")) +
+  coord_cartesian(ylim = c(0, 10)) +
+  labs(color = NULL)
+```
+
+```{r}
+#| label: fig-post5-epred
+#| fig-cap: Očekávání modelu s intervaly
+post_draws5 |>
+  ggplot(aes(p, epred)) +
+  stat_lineribbon(.width = 0.95, fill = "lightblue2") +
+  facet_grid(lr ~ t, labeller = labeller(t = lab_t, lr = lab_lr)) +
+  scale_x_continuous(breaks = p_vals, labels = p_labels, name = "Počet cest") +
+  scale_y_continuous(breaks = breaks_width(1), name = "Očekávaný průměr") +
+  coord_cartesian(ylim = c(0, 10)) +
+  labs(color = NULL)
+```
+
+Jak lze vidět na @fig-prior-post5-epred a @fig-post5-epred, model vnímá jednoznačně rostoucí trend v počtu cest
+
+se zvyšujícím se časem se dle modelu zvyšuje i rozptyl, což jde proti naší původní hypotéze o vyšší přesnosti při delším časovém úseku.
+
+Naši druhou hypotézu, vyšší počet smyšek vede
+
+```{r}
+#| label: fig-post5-pred
+#| fig-cap: A posteriori predikce (tmavě) vs. reálná data (světlé sloupce)
+pp_check(fit5, type = "bars", ndraws = 200) +
+  scale_x_continuous(breaks = breaks_width(1), name = "Počet cest") +
+  theme_dist
+```
+
+## PSIS-LOO
+
+Při porovnání predikční validity modelů pomocí aproximální leave-one-out cross validace dosáhl model č. 5 výrazně lepších výsledků než ostatní modely.
+
+```{r}
+#| label: tbl-loo
+#| tbl-cap: Porovnání predikčních schopností modelu pomocí LOO
+fit1 <- add_criterion(fit1, "loo", save_psis = TRUE)
+fit2 <- add_criterion(fit2, "loo", save_psis = TRUE)
+fit3 <- add_criterion(fit3, "loo", save_psis = TRUE)
+# fit4 <- add_criterion(fit4, "loo", save_psis = TRUE)
+fit5 <- add_criterion(fit5, "loo", save_psis = TRUE)
+
+loo_compare(fit1, fit2, fit3, fit5) |>
+  as_tibble(rownames = "model") |>
+  select(1:3) |>
+  kbl(align = "l") |>
+  kable_styling(full_width = FALSE)
+```
+
+# Limitace
+
+- Interval 5 s pro odpověď zkresluje efekt doby prezentace stimulů.
+
+- Nedostatek dat pro komplexnější modil odlišující různé strategie (hádání vs. počítání).
