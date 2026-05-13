@@ -2,7 +2,7 @@
 library(ggplot2)
 # library(igraph)
 
-sim_results <- readr::read_rds(here::here("results/sim_results.rds"))
+sim_results <- readr::read_rds(here::here("simulation/sim_results.rds"))
 
 max_lattice_edges <- 24L # 4x4 undirected cardinal
 

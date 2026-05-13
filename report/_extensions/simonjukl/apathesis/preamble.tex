@@ -1,0 +1,61 @@
+% Load ulem before pandoc does, so normalem takes effect (pandoc loads ulem without normalem,
+% which redefines \emph to underline instead of italics)
+\usepackage[normalem]{ulem}
+
+% Front matter pages count but page numbers are not displayed; restored at intro.qmd
+\AtBeginDocument{\pagestyle{empty}}
+\renewcommand{\chapterpagestyle}{empty}
+
+\KOMAoptions{numbers=noendperiod}
+
+% Shared spacing after all headings and pseudo-headings
+\newlength{\chapterafterskip}
+\setlength{\chapterafterskip}{1\baselineskip}
+
+% KOMA heading sizes
+\RedeclareSectionCommand[font=\Large\bfseries, beforeskip=0pt, afterskip=\chapterafterskip]{chapter}
+\RedeclareSectionCommand[font=\large\bfseries]{section}
+\RedeclareSectionCommand[font=\normalsize\bfseries]{subsection}
+\AfterTOCHead[toc]{\vspace{\chapterafterskip}}
+\AfterTOCHead[lof]{\vspace{\chapterafterskip}}
+\AfterTOCHead[lot]{\vspace{\chapterafterskip}}
+
+
+% Use body font (Liberation Serif) for headings
+\addtokomafont{disposition}{\rmfamily}
+
+% Single page break between chapters instead of two-page spread
+% \let\cleardoublepage\clearpage
+
+% unused package
+% \usepackage{booktabs}
+
+% \usepackage{tabularray}
+% \SetTblrInner{belowsep=6pt}
+\usepackage{caption}
+\DeclareCaptionLabelSeparator{newlineskip}{\\[16pt]}
+\captionsetup{
+  format=plain,
+  position=above,
+  labelfont=bf,
+  textfont=it,
+  labelsep=newlineskip,
+  justification=raggedright,
+  singlelinecheck=false,
+  skip=16pt
+}
+
+% Space between a top/bottom float and the surrounding text
+% \setlength{\textfloatsep}{80pt plus 4pt minus 6pt}
+% \captionsetup[figure]{position=above}
+% \captionsetup[table]{position=above}
+
+% Left-align longtables (Quarto's default table rendering)
+% \setlength{\LTleft}{0pt}
+% \setlength{\LTright}{\fill}
+
+\setcounter{topnumber}{2}
+\setcounter{bottomnumber}{2}
+\renewcommand{\topfraction}{0.85}
+\renewcommand{\bottomfraction}{0.85}
+\renewcommand{\floatpagefraction}{0.70}

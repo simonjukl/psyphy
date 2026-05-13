@@ -82,7 +82,6 @@ as_plot_row <- function(row) {
 # plot a single row from sim_results or real data (via as_plot_row)
 # show_labels = TRUE shows node numbers
 # arrows = TRUE draws arrowheads
-
 plot_row <- function(
   row,
   show_labels = FALSE,
@@ -124,4 +123,21 @@ plot_row <- function(
     edge.arrow.mode = if (arrows) 3L else 0L,
     ...
   )
+}
+
+
+# kable_apa --------------------------------------------------------------
+# nicely formatted kable
+kable_apa <- function(x, ...) {
+  kableExtra::kbl(
+    x,
+    align = c("l", rep("c", ncol(x) - 1)),
+    booktabs = TRUE,
+    digits = 2
+  ) |>
+    kable_styling(
+      position = "left",
+      full_width = FALSE,
+      latex_options = 'HOLD_position'
+    )
 }

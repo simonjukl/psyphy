@@ -1,0 +1,137 @@
+$if(linestretch)$\setstretch{$linestretch$}$endif$
+% ---- Title page ----
+\thispagestyle{empty}
+\begin{center}
+
+$if(thesis.university)${\Large\textsc{$thesis.university$}}\\[0.4cm]$endif$
+$if(thesis.faculty)${\large $thesis.faculty$}\\[0.3cm]$endif$
+$if(thesis.department)${\large $thesis.department$}\\[0.3cm]$endif$
+$if(thesis.type)${\large $thesis.type$}\\[1.2cm]$endif$
+
+
+$if(thesis.logo)$
+\includegraphics[width=$if(thesis.logo-width)$$thesis.logo-width$$else$3cm$endif$]{$thesis.logo$}\\[1.2cm]$else$\vspace{4cm}
+$endif$
+
+{\Large $for(by-author)$$by-author.name.given$ $by-author.name.family$$sep$ \& $endfor$}\\[1.5cm]
+
+{\Large\bfseries $title$}\\[0.6cm]
+
+$if(subtitle)${\large\itshape $subtitle$}\\[1cm]$endif$
+
+\end{center}
+
+\vfill
+
+\begin{flushright}
+$if(thesis.advisor)$
+{\large $language.thesis-advisor-label$: $thesis.advisor$}\\[0.3cm]
+$endif$
+
+$if(thesis.consultant)$
+{\large $language.thesis-consultant-label$: $thesis.consultant$}\\[0.3cm]
+$endif$
+
+$if(thesis.program)${\large $language.thesis-program-label$: $thesis.program$}\\[0.3cm]$endif$
+$if(date)${\large $date$}$endif$
+\end{flushright}
+\vspace{2cm}
+\newpage
+
+% ---- Statement (Prohlášení) ----
+$if(thesis.statement)$
+\thispagestyle{empty}
+\vspace*{\fill}
+{\Large\bfseries $language.thesis-statement-title$}
+
+\vspace{\chapterafterskip}
+
+$thesis.statement.text$
+
+\vspace{2em}
+
+\noindent V $thesis.statement.location$ dne $thesis.statement.date$
+
+\vspace{2.5cm}
+
+\noindent\makebox[15em]{\dotfill}
+
+\clearpage
+$endif$
+
+% ---- Acknowledgment (Poděkování) ----
+$if(thesis.acknowledgment)$
+\thispagestyle{empty}
+\vspace*{\fill}
+{\Large\bfseries $language.thesis-acknowledgment-title$}
+
+\vspace{\chapterafterskip}
+
+$thesis.acknowledgment.text$
+
+\clearpage
+$endif$
+
+% ---- Abstract Czech (Abstrakt) ----
+$if(thesis.abstract.cs)$
+\thispagestyle{empty}
+\chapter*{$language.thesis-abstract-cs-title$}
+
+% \vspace{1\baselineskip}
+
+$thesis.abstract.cs.text$
+
+\bigskip
+
+\noindent\textbf{$language.thesis-keywords-cs-label$:} $thesis.abstract.cs.keywords$
+
+\clearpage
+$endif$
+
+% ---- Abstract English (Abstract) ----
+$if(thesis.abstract.en)$
+\thispagestyle{empty}
+\chapter*{$language.thesis-abstract-en-title$}
+
+% \vspace{1\baselineskip}
+
+$thesis.abstract.en.text$
+
+\bigskip
+
+\noindent\textbf{$language.thesis-keywords-en-label$:} $thesis.abstract.en.keywords$
+
+\clearpage
+$endif$
+
+% ---- Table of contents, lists of figures and tables ----
+% toc/lof/lot are disabled in _extension.yml so placement is controlled here
+\renewcommand{\contentsname}{$language.thesis-toc-title$}
+\renewcommand{\listfigurename}{$language.thesis-lof-title$}
+\renewcommand{\listtablename}{$language.thesis-lot-title$}
+\setcounter{tocdepth}{$if(toc-depth)$$toc-depth$$else$3$endif$}
+{\singlespacing
+\tableofcontents
+$if(thesis.lof)$\listoffigures$endif$
+$if(thesis.lot)$\listoftables$endif$
+}
+
+% ---- Abbreviations (Seznam zkratek) ----
+$if(thesis.abbreviations.items)$
+\thispagestyle{empty}
+\chapter*{$language.thesis-abbreviations-title$}
+
+% \vspace{1\baselineskip}
+
+\begin{tabular}{ll}
+$for(thesis.abbreviations.items)$
+\textbf{$it.abbr$} & $it.meaning$\\
+$endfor$
+\end{tabular}
+
+\clearpage
+$endif$
+
+% removed because it introduced page numbering for toc
+% \pagestyle{plain}
+% \renewcommand{\chapterpagestyle}{plain}

@@ -24,7 +24,8 @@ data/simulated/
 Thumbs.db
 
 # Rendered report files
-# report_files/
+report_files/
+report_cache/
 # report.html
 
 # Formatter config
@@ -41,3 +42,5 @@ prompt.txt
 
 /.quarto/
 **/*.quarto_ipynb
+
+/.luarc.json

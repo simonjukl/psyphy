@@ -99,4 +99,4 @@ future::plan(sequential)
 
 sim_results
 
-readr::write_rds(sim_results, here("results/sim_results.rds"))
+readr::write_rds(sim_results, here("simulation/sim_results.rds"))
